@@ -2,6 +2,39 @@ import type { Plugin, Hooks } from '@opencode-ai/plugin';
 import type { Event, UserMessage, TextPart } from '@opencode-ai/sdk';
 import { Logger } from './lib/logger';
 
+/**
+ * Check if an event should be skipped to prevent recursive logging.
+ * This handles:
+ * 1. file.watcher.updated events for raw-outputs/ (would cause infinite loop)
+ * 2. message.updated events with diffs referencing the session's own log file
+ */
+function shouldSkipEvent(event: Event, sessionId: string | null): boolean {
+  // Skip file watcher events for raw-outputs directory
+  if (event.type === 'file.watcher.updated') {
+    const file = (event.properties as any)?.file;
+    if (typeof file === 'string' && file.includes('raw-outputs/')) {
+      return true;
+    }
+  }
+
+  // Skip message.updated events with self-referencing diffs
+  if (sessionId && event.type === 'message.updated') {
+    const info = (event.properties as any)?.info;
+    const diffs = info?.summary?.diffs;
+
+    if (Array.isArray(diffs)) {
+      const hasSelfRef = diffs.some((diff: any) =>
+        typeof diff?.file === 'string' &&
+        diff.file.includes('raw-outputs/') &&
+        diff.file.includes(sessionId)
+      );
+      if (hasSelfRef) return true;
+    }
+  }
+
+  return false;
+}
+
 export const PAIPlugin: Plugin = async ({ project, directory, $, client }) => {
   let logger: Logger | null = null;
   let lastAssistantMessageContent: string = '';
@@ -14,7 +47,10 @@ export const PAIPlugin: Plugin = async ({ project, directory, $, client }) => {
         logger = new Logger(currentSessionId, project.worktree);
       }
 
-      if (logger && event.type !== 'message.part.updated') {
+      // Skip logging events that would cause recursive file growth
+      if (logger &&
+          event.type !== 'message.part.updated' &&
+          !shouldSkipEvent(event, currentSessionId)) {
         logger.logEvent(event);
       }
       
