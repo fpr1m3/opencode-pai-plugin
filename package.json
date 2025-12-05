@@ -4,6 +4,10 @@
   "description": "PAI hooks compatibility plugin for OpenCode",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "repository": "fpr1m3/opencode-pai-plugin",
   "scripts": {
     "build": "tsc",
     "test": "bun test",
