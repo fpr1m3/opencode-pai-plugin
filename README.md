@@ -4,19 +4,32 @@ This plugin implements the core Personal AI Infrastructure (PAI) logic as a nati
 
 ## Installation
 
-1.  Build the plugin:
-    ```bash
-    cd plugins/opencode-pai
-    bun run build
-    ```
-2.  Install the plugin:
-    ```bash
-    opencode plugins install ./plugins/opencode-pai
-    ```
+Install the plugin using your package manager:
+
+```bash
+bun add github:fpr1m3/opencode-pai-plugin
+```
+
+Or, clone the repository and build it manually:
+
+```bash
+git clone https://github.com/fpr1m3/opencode-pai-plugin.git
+cd opencode-pai-plugin
+bun install
+bun run build
+```
 
 ## Usage
 
-Once installed, the plugin will automatically:
+Create a new file in your project at `.opencode/plugin/my-plugin.ts` and add the following code to register the plugin:
+
+```typescript
+import { PaiPlugin } from "opencode-pai-plugin";
+
+export default PaiPlugin;
+```
+
+Once installed and registered, the plugin will automatically:
 
 *   Load the `CORE/SKILL.md` file as core context at the start of each session.
 *   Log all events and tool calls to the `.opencode/history/raw-outputs` directory.
