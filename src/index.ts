@@ -35,6 +35,7 @@ function shouldSkipEvent(event: Event, sessionId: string | null): boolean {
 export const PAIPlugin: Plugin = async ({ project, directory, $, client }) => {
   let logger: Logger | null = null;
   let currentSessionId: string | null = null;
+  let titleUpdatesDisabled: boolean = false;
 
   const hooks: Hooks = {
     event: async ({ event }: { event: Event }) => {
@@ -63,7 +64,7 @@ export const PAIPlugin: Plugin = async ({ project, directory, $, client }) => {
       if (event.type === 'message.part.updated') {
           const part = event.properties.part;
 
-          if (part.type === 'text') {
+          if (part.type === 'text' && !titleUpdatesDisabled) {
               const prompt = part.text;
               let tabTitle = 'Processing request...';
 
@@ -86,7 +87,10 @@ export const PAIPlugin: Plugin = async ({ project, directory, $, client }) => {
               try {
                 process.stderr.write(`\x1b]0;${titleWithEmoji}\x07`);
               } catch (e) {
-                  // ignore
+                  titleUpdatesDisabled = true;
+                  if (logger) {
+                    logger.logError('Terminal Title Update', e);
+                  }
               }
           }
       }

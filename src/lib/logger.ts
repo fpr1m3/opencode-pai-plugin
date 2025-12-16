@@ -135,6 +135,33 @@ export class Logger {
       this.writeEvent('ToolUse', payload, toolName, toolInput);
   }
 
+  public logError(context: string, error: any): void {
+    try {
+      const now = new Date();
+      const pstDate = new Date(now.toLocaleString('en-US', { timeZone: process.env.TIME_ZONE || 'America/Los_Angeles' }));
+      const year = pstDate.getFullYear();
+      const month = String(pstDate.getMonth() + 1).padStart(2, '0');
+      const day = String(pstDate.getDate()).padStart(2, '0');
+
+      const filename = `${year}-${month}-${day}_errors.log`;
+      const filePath = getHistoryFilePath('system-logs', filename);
+      const dir = dirname(filePath);
+
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
+
+      const timestamp = this.getPSTTimestamp();
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : '';
+      
+      const logEntry = `[${timestamp}] [${context}] ${errorMessage}\n${stack}\n-------------------\n`;
+      appendFileSync(filePath, logEntry, 'utf-8');
+    } catch (e) {
+      // Intentionally silent - TUI protection
+    }
+  }
+
   // Core write method
   private writeEvent(eventType: string, payload: any, toolName?: string, toolInput?: any): void {
       const sessionId = this.sessionId;
@@ -164,7 +191,7 @@ export class Logger {
         const jsonLine = JSON.stringify(hookEvent) + '\n';
         appendFileSync(eventsFile, jsonLine, 'utf-8');
       } catch (error) {
-        console.error('Event capture error:', error);
+        this.logError('EventCapture', error);
       }
   }
 

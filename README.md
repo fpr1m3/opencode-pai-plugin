@@ -33,7 +33,7 @@ Once installed and registered, the plugin will automatically:
 
 *   Load the `CORE/SKILL.md` file as core context at the start of each session.
 *   Log all events and tool calls to the `.opencode/history/raw-outputs` directory.
-*   Update the terminal tab title with the current session status.
+*   Update the terminal tab title with the current session status (failsafe mode included).
 *   Create a session summary in `.opencode/history/sessions` when a session ends.
 
 ---
