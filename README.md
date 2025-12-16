@@ -35,3 +35,7 @@ Once installed and registered, the plugin will automatically:
 *   Log all events and tool calls to the `.opencode/history/raw-outputs` directory.
 *   Update the terminal tab title with the current session status.
 *   Create a session summary in `.opencode/history/sessions` when a session ends.
+
+---
+
+**Disclaimer:** This project is not built by the OpenCode team and is not affiliated with them in any way.
