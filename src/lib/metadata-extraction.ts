@@ -19,6 +19,15 @@ export interface AgentInstanceMetadata {
 }
 
 /**
+ * Validate that an ID string contains only safe characters
+ * Allows alphanumeric, hyphens, and underscores.
+ * Prevents path traversal and injection attacks.
+ */
+function isValidId(id: string): boolean {
+  return /^[a-zA-Z0-9\-_]+$/.test(id);
+}
+
+/**
  * Extract agent instance ID from Task tool input
  *
  * Looks for patterns in priority order:
@@ -52,13 +61,18 @@ export function extractAgentInstanceId(
   if (!result.agent_instance_id && toolInput?.prompt && typeof toolInput.prompt === 'string') {
     const promptMatch = toolInput.prompt.match(/\[AGENT_INSTANCE:\s*([^\]]+)\]/);
     if (promptMatch) {
-      result.agent_instance_id = promptMatch[1].trim();
+      const extractedId = promptMatch[1].trim();
 
-      // Parse agent type and instance number from ID
-      const parts = result.agent_instance_id!.match(/^([a-z-]+)-(\d+)$/);
-      if (parts) {
-        result.agent_type = parts[1];
-        result.instance_number = parseInt(parts[2], 10);
+      // Security: Validate ID format to prevent injection
+      if (isValidId(extractedId)) {
+        result.agent_instance_id = extractedId;
+
+        // Parse agent type and instance number from ID
+        const parts = result.agent_instance_id!.match(/^([a-z-]+)-(\d+)$/);
+        if (parts) {
+          result.agent_type = parts[1];
+          result.instance_number = parseInt(parts[2], 10);
+        }
       }
     }
   }
@@ -68,14 +82,20 @@ export function extractAgentInstanceId(
   if (toolInput?.prompt && typeof toolInput.prompt === 'string') {
     const parentSessionMatch = toolInput.prompt.match(/\[PARENT_SESSION:\s*([^\]]+)\]/);
     if (parentSessionMatch) {
-      result.parent_session_id = parentSessionMatch[1].trim();
+      const extractedId = parentSessionMatch[1].trim();
+      if (isValidId(extractedId)) {
+        result.parent_session_id = extractedId;
+      }
     }
 
     // Extract parent task from prompt
     // Example: "[PARENT_TASK: research_1731445892345]"
     const parentTaskMatch = toolInput.prompt.match(/\[PARENT_TASK:\s*([^\]]+)\]/);
     if (parentTaskMatch) {
-      result.parent_task_id = parentTaskMatch[1].trim();
+      const extractedId = parentTaskMatch[1].trim();
+      if (isValidId(extractedId)) {
+        result.parent_task_id = extractedId;
+      }
     }
   }
 
