@@ -3,3 +3,8 @@ dist
 .DS_Store
 .env
 *.jsonl
+*.log
+.opencode/history
+.opencode/scratchpad
+bun.lockb
+.jules

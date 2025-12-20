@@ -1,7 +1,7 @@
 {
-  "name": "@opencode-ai/opencode-pai",
+  "name": "opencode-pai-plugin",
   "version": "1.0.0",
-  "description": "PAI hooks compatibility plugin for OpenCode",
+  "description": "Personal AI Infrastructure (PAI) plugin for OpenCode",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

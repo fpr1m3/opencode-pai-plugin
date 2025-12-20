@@ -5,25 +5,29 @@
 **Type:** Core Infrastructure
 
 ## Description
-PAI is the core Personal AI Infrastructure agent implemented by this plugin. It serves as the primary interface for the OpenCode environment, managing session context, logging, and user interactions.
+PAI is the core Personal AI Infrastructure agent implemented by this plugin. It serves as the primary interface for the OpenCode environment, managing session context, security, logging, and user interactions.
 
 ## Capabilities
-- **Context Management:** Automatically loads the `core/SKILL.md` file from the user's skills directory at the start of each session, injecting it as the core system prompt.
-- **Event Logging:** Logs all session events, tool calls, and message updates to the `.opencode/history/raw-outputs` directory for audit and debugging purposes.
-- **Fault-Tolerant Status Updates:** Updates the terminal tab title to reflect activity. Includes a "circuit breaker" to automatically disable updates if interrupts (e.g., ESC key) are detected, preventing TUI corruption.
-- **Session Summarization:** Generates a summary of the session in `.opencode/history/sessions` when a session ends (if configured).
+- **Context Management**: Automatically loads the `skills/core/SKILL.md` file from `PAI_DIR`, performing dynamic variable substitution for personalized interaction.
+- **Project Requirements**: Detects and loads `.opencode/dynamic-requirements.md` from the current project worktree to inject task-specific constraints.
+- **Event Logging**: Logs all session events and tool executions to `PAI_DIR/history/raw-outputs` in an analytics-ready JSONL format.
+- **Session Summarization**: Generates human-readable Markdown summaries in `PAI_DIR/history/sessions` when a session ends.
+- **Security Validation**: Intercepts Bash commands via `permission.ask` to block dangerous patterns or require user confirmation.
+- **Interactive Feedback**: Updates terminal tab titles in real-time during tool execution and provides a summary upon task completion.
 
 ## Configuration
-The agent's behavior contains some configurable elements via environment variables or file templates:
+The agent's behavior is controlled via environment variables:
 
-| Configuration | Description |
-| :--- | :--- |
-| `core/SKILL.md` | The core system prompt/skill definition file located in `.opencode/skills/core/SKILL.md`. |
-| `USER_NAME` | Environment variable to override the user's name (default: "Engineer"). |
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `PAI_DIR` | Root directory for PAI skills and history | `~/.claude` |
+| `DA` | Name of your Digital Assistant | `PAI` |
+| `ENGINEER_NAME` | Your name/identity | `Engineer` |
+| `DA_COLOR` | UI color theme for your DA | `blue` |
 
 ## Codebase Structure
-- `src/index.ts`: The plugin entry point. Handles hooks and implements the TUI circuit breaker logic.
-- `src/lib/context-loader.ts`: Responsible for reading and processing the `core/SKILL.md` file, injecting environment variables.
-- `src/lib/logger.ts`: Implements a buffering JSONL logger. Captures events safely, redirecting internal errors to `system-logs` to protect the TUI.
-- `src/lib/notifier.ts`: A utility to send POST requests to a local voice server (defaulting to `localhost:8888`).
-- `src/lib/paths.ts`: Contains helper functions for resolving paths (`getHistoryDir`, `getRawOutputsDir`, `getSkillsDir`) and handling environment variable expansion in paths.
+- `src/index.ts`: The plugin entry point. Implements lifecycle hooks for events, permissions, and system prompt transformations.
+- `src/lib/logger.ts`: Implements the JSONL logger and Markdown summary generator.
+- `src/lib/security.ts`: Contains the security validation logic and attack patterns.
+- `src/lib/paths.ts`: Centralized path resolution for the PAI directory structure.
+- `src/lib/metadata-extraction.ts`: Utility for enriching events with agent-specific metadata.

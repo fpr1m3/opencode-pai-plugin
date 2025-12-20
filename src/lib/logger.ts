@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import type { Event } from '@opencode-ai/sdk';
-import { PAI_DIR, getHistoryFilePath } from './paths';
+import { PAI_DIR, getHistoryFilePath, HISTORY_DIR } from './paths';
 import { enrichEventWithAgentMetadata, isAgentSpawningCall } from './metadata-extraction';
 
 interface HookEvent {
@@ -16,11 +16,13 @@ interface HookEvent {
 
 export class Logger {
   private sessionId: string;
-  private projectRoot: string;
+  private toolsUsed = new Set<string>();
+  private filesChanged = new Set<string>();
+  private commandsExecuted: string[] = [];
+  private startTime = Date.now();
 
-  constructor(sessionId: string, projectRoot: string) {
+  constructor(sessionId: string) {
     this.sessionId = sessionId;
-    this.projectRoot = projectRoot;
   }
 
   // Get PST timestamp
@@ -97,42 +99,153 @@ export class Logger {
 
   // Method to log generic OpenCode event
   public logOpenCodeEvent(event: Event): void {
-      // We can't access event.timestamp directly if it doesn't exist on the type
-      // OpenCode Event types might not all have timestamp.
-      // Checking type definitions or assuming Date.now() if missing.
-      const timestamp = (event as any).timestamp || Date.now();
-
+      const anyEvent = event as any;
+      const timestamp = anyEvent.timestamp || Date.now();
       const payload = {
-          ...event.properties,
+          ...anyEvent.properties,
           timestamp: timestamp
       };
 
-      this.writeEvent(event.type, payload);
-  }
-
-  // Method to log tool execution (called from tool.execute.after hook)
-  public logToolExecution(input: any, output: any): void {
-      const toolName = input.tool;
-      const toolInput = input.args;
-
-      const sessionId = this.sessionId;
-
-      // Logic to update agent mapping
-      if (toolName === 'Task' && toolInput?.subagent_type) {
-          this.setAgentForSession(sessionId, toolInput.subagent_type);
-      } else if (input.tool === 'subagent_stop' || input.tool === 'stop') { // Hypothethical
-           this.setAgentForSession(sessionId, 'pai');
+      // Track stats for summary
+      if (anyEvent.type === 'tool.call' || anyEvent.type === 'tool.execute.before') {
+          const props = anyEvent.properties as any;
+          const tool = props?.tool || props?.tool_name;
+          if (tool) {
+              this.toolsUsed.add(tool);
+              
+              if (tool === 'Bash' || tool === 'bash') {
+                  const command = props?.input?.command || props?.tool_input?.command;
+                  if (command) this.commandsExecuted.push(command);
+              }
+              
+              if (['Edit', 'Write', 'edit', 'write'].includes(tool)) {
+                  const path = props?.input?.file_path || props?.input?.path || 
+                               props?.tool_input?.file_path || props?.tool_input?.path;
+                  if (path) this.filesChanged.add(path);
+              }
+          }
       }
 
-      // We might want to log this as an event too
+      this.writeEvent(anyEvent.type, payload);
+  }
+
+  /**
+   * Log tool execution from tool.execute.after hook
+   *
+   * Input structure: { tool: string; sessionID: string; callID: string }
+   * Output structure: { title: string; output: string; metadata: any }
+   */
+  public logToolExecution(
+    input: { tool: string; sessionID: string; callID: string },
+    output: { title: string; output: string; metadata: any }
+  ): void {
+      const toolName = input.tool;
+      const sessionId = this.sessionId;
+      
+      this.toolsUsed.add(toolName);
+
+      // Extract metadata - may contain additional tool info
+      const metadata = output.metadata || {};
+
+      // Logic to update agent mapping based on Task tool spawning subagents
+      if (toolName === 'Task' && metadata?.subagent_type) {
+          this.setAgentForSession(sessionId, metadata.subagent_type);
+      } else if (toolName === 'subagent_stop' || toolName === 'stop') {
+          this.setAgentForSession(sessionId, 'pai');
+      }
+
       const payload = {
           tool_name: toolName,
-          tool_input: toolInput,
-          tool_output: output,
-          // ... other fields
+          tool_title: output.title,
+          tool_output: output.output,
+          tool_metadata: metadata,
+          call_id: input.callID,
       };
 
-      this.writeEvent('ToolUse', payload, toolName, toolInput);
+      this.writeEvent('ToolUse', payload, toolName, metadata);
+  }
+
+  public async generateSessionSummary(): Promise<string | null> {
+    try {
+      const now = new Date();
+      const timestamp = now.toISOString()
+        .replace(/:/g, '')
+        .replace(/\..+/, '')
+        .replace('T', '-'); // YYYY-MM-DD-HHMMSS
+
+      const yearMonth = timestamp.substring(0, 7);
+      const date = timestamp.substring(0, 10);
+      const time = timestamp.substring(11).replace(/-/g, ':');
+      const duration = Math.round((Date.now() - this.startTime) / 60000);
+
+      const sessionDir = join(HISTORY_DIR, 'sessions', yearMonth);
+      if (!existsSync(sessionDir)) {
+        mkdirSync(sessionDir, { recursive: true });
+      }
+
+      const focus = this.filesChanged.size > 0 ? 'development' : 'research';
+      const filename = `${timestamp}_SESSION_${focus}.md`;
+      const filePath = join(sessionDir, filename);
+
+      const summary = `---
+capture_type: SESSION
+timestamp: ${new Date().toISOString()}
+session_id: ${this.sessionId}
+duration_minutes: ${duration}
+executor: pai
+---
+
+# Session: ${focus}
+
+**Date:** ${date}
+**Time:** ${time}
+**Session ID:** ${this.sessionId}
+
+---
+
+## Session Overview
+
+**Focus:** ${focus === 'development' ? 'Software development and code modification' : 'Research and general assistance'}
+**Duration:** ${duration} minutes
+
+---
+
+## Tools Used
+
+${this.toolsUsed.size > 0 ? Array.from(this.toolsUsed).map(t => `- ${t}`).sort().join('\n') : '- None recorded'}
+
+---
+
+## Files Modified
+
+${this.filesChanged.size > 0 ? Array.from(this.filesChanged).map(f => `- \`${f}\``).sort().join('\n') : '- None recorded'}
+
+**Total Files Changed:** ${this.filesChanged.size}
+
+---
+
+## Commands Executed
+
+${this.commandsExecuted.length > 0 ? '```bash\n' + this.commandsExecuted.slice(0, 20).join('\n') + '\n```' : 'None recorded'}
+
+---
+
+## Notes
+
+This session summary was automatically generated by the PAI OpenCode Plugin.
+
+---
+
+**Session Outcome:** Completed
+**Generated:** ${new Date().toISOString()}
+`;
+
+      writeFileSync(filePath, summary);
+      return filePath;
+    } catch (error) {
+      this.logError('SessionSummary', error);
+      return null;
+    }
   }
 
   public logError(context: string, error: any): void {

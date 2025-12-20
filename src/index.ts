@@ -1,15 +1,19 @@
 import type { Plugin, Hooks } from '@opencode-ai/plugin';
-import type { Event, TextPart } from '@opencode-ai/sdk';
+import type { Event } from '@opencode-ai/sdk';
 import { Logger } from './lib/logger';
+import { PAI_DIR } from './lib/paths';
+import { validateCommand } from './lib/security';
+import { join } from 'path';
+import { existsSync, readFileSync } from 'fs';
 
 /**
  * Check if an event should be skipped to prevent recursive logging.
  */
 function shouldSkipEvent(event: Event, sessionId: string | null): boolean {
-  // Skip file watcher events for raw-outputs directory
+  // Skip file watcher events for raw-outputs directory or history directory
   if (event.type === 'file.watcher.updated') {
     const file = (event.properties as any)?.file;
-    if (typeof file === 'string' && file.includes('raw-outputs/')) {
+    if (typeof file === 'string' && (file.includes('raw-outputs/') || file.includes('history/'))) {
       return true;
     }
   }
@@ -22,7 +26,7 @@ function shouldSkipEvent(event: Event, sessionId: string | null): boolean {
     if (Array.isArray(diffs)) {
       const hasSelfRef = diffs.some((diff: any) =>
         typeof diff?.file === 'string' &&
-        diff.file.includes('raw-outputs/') &&
+        diff.file.includes('history/') &&
         diff.file.includes(sessionId)
       );
       if (hasSelfRef) return true;
@@ -32,77 +36,177 @@ function shouldSkipEvent(event: Event, sessionId: string | null): boolean {
   return false;
 }
 
-export const PAIPlugin: Plugin = async ({ project, directory, $, client }) => {
+/**
+ * Generate a 4-word tab title summarizing what was done
+ */
+function generateTabTitle(completedLine?: string): string {
+  if (completedLine) {
+    const cleanCompleted = completedLine
+      .replace(/\*+/g, '')
+      .replace(/\[.*?\]/g, '')
+      .replace(/🎯\s*COMPLETED:\s*/gi, '')
+      .replace(/COMPLETED:\s*/gi, '')
+      .trim();
+
+    const words = cleanCompleted.split(/\s+/)
+      .filter(word => word.length > 2 && !['the', 'and', 'but', 'for', 'are', 'with', 'this', 'that'].includes(word.toLowerCase()))
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+
+    if (words.length >= 2) {
+      return words.slice(0, 4).join(' ');
+    }
+  }
+  return 'PAI Task Done';
+}
+
+export const PAIPlugin: Plugin = async ({ worktree }) => {
   let logger: Logger | null = null;
   let currentSessionId: string | null = null;
-  let titleUpdatesDisabled: boolean = false;
+  
+  // Load CORE skill content from $PAI_DIR/skills/core/SKILL.md
+  let coreSkillContent = '';
+  const coreSkillPath = join(PAI_DIR, 'skills', 'core', 'SKILL.md');
+  if (existsSync(coreSkillPath)) {
+    try {
+      coreSkillContent = readFileSync(coreSkillPath, 'utf-8');
+    } catch (e) {
+      console.error('PAI: Failed to read CORE skill:', e);
+    }
+  }
 
+  // Dynamic Variable Substitution for System Prompt
+  const daName = process.env.DA || 'PAI';
+  const engineerName = process.env.ENGINEER_NAME || 'Engineer';
+  const daColor = process.env.DA_COLOR || 'blue';
+
+  const personalizedSkillContent = coreSkillContent
+    .replace(/\{\{DA\}\}/g, daName)
+    .replace(/\{\{DA_COLOR\}\}/g, daColor)
+    .replace(/\{\{ENGINEER_NAME\}\}/g, engineerName);
+
+  // Load project-specific dynamic requirements if they exist
+  let projectRequirements = '';
+  const projectReqPath = join(worktree, '.opencode', 'dynamic-requirements.md');
+  if (existsSync(projectReqPath)) {
+    try {
+      projectRequirements = readFileSync(projectReqPath, 'utf-8');
+      console.log(`PAI: Loaded project requirements from ${projectReqPath}`);
+    } catch (e) {
+      console.error('PAI: Failed to read project requirements:', e);
+    }
+  }
+
+  console.log(`PAI Plugin Initialized (Personalized for ${engineerName} & ${daName})`)
+  
   const hooks: Hooks = {
     event: async ({ event }: { event: Event }) => {
+      const anyEvent = event as any;
+
       // Initialize Logger on session creation
       if (event.type === 'session.created') {
-        currentSessionId = event.properties.info.id;
-        logger = new Logger(currentSessionId, project.worktree);
+        currentSessionId = anyEvent.properties.info.id;
+        logger = new Logger(currentSessionId!);
       }
 
       // Handle generic event logging
       if (logger &&
-          event.type !== 'message.part.updated' && // Don't log every keystroke/part update
-          !shouldSkipEvent(event, currentSessionId)) {
+        event.type !== 'message.part.updated' && 
+        !shouldSkipEvent(event, currentSessionId)) {
         logger.logOpenCodeEvent(event);
       }
-      
-      // Handle session deletion
-      if (event.type === 'session.deleted') {
-        if (logger) {
-            logger.flush();
+
+      // Handle real-time tab title updates (Pre-Tool Use)
+      if (anyEvent.type === 'tool.call') {
+        const props = anyEvent.properties;
+        if (props?.tool === 'Bash' || props?.tool === 'bash') {
+          const cmd = props?.input?.command?.split(/\s+/)[0] || 'bash';
+          process.stderr.write(`\x1b]0;Running ${cmd}...\x07`);
+        } else if (props?.tool === 'Edit' || props?.tool === 'Write') {
+          const file = props?.input?.file_path?.split('/').pop() || 'file';
+          process.stderr.write(`\x1b]0;Editing ${file}...\x07`);
+        } else if (props?.tool === 'Task') {
+          const type = props?.input?.subagent_type || 'agent';
+          process.stderr.write(`\x1b]0;Agent: ${type}...\x07`);
         }
       }
 
-      // Handle user message for tab title update
-      // We check for message.part.updated where type is text
-      if (event.type === 'message.part.updated') {
-          const part = event.properties.part;
-
-          if (part.type === 'text' && !titleUpdatesDisabled) {
-              const prompt = part.text;
-              let tabTitle = 'Processing request...';
-
-              if (prompt) {
-                const words = prompt.replace(/[^\w\s]/g, ' ').trim().split(/\s+/)
-                  .filter(w => w.length > 2 && !['the', 'and', 'but', 'for', 'are', 'with', 'you', 'can'].includes(w.toLowerCase()))
-                  .slice(0, 3);
-
-                if (words.length > 0) {
-                  tabTitle = words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase();
-                  if (words.length > 1) {
-                    tabTitle += ' ' + words.slice(1).map(w => w.toLowerCase()).join(' ');
-                  }
-                  tabTitle += '...';
-                }
-              }
-
-              const titleWithEmoji = '♻️ ' + tabTitle;
-              // Update terminal title safely
-              try {
-                process.stderr.write(`\x1b]0;${titleWithEmoji}\x07`);
-              } catch (e) {
-                  titleUpdatesDisabled = true;
-                  if (logger) {
-                    logger.logError('Terminal Title Update', e);
-                  }
-              }
+      // Handle assistant completion (Tab Titles)
+      if (event.type === 'message.updated') {
+        const info = anyEvent.properties?.info;
+        if (info?.author === 'assistant' && info?.content) {
+          const content = typeof info.content === 'string' ? info.content : '';
+          
+          // Look for COMPLETED: line (can be prefaced by 🎯 or just text)
+          const completedMatch = content.match(/(?:🎯\s*)?COMPLETED:\s*(.+?)(?:\n|$)/i);
+          if (completedMatch) {
+            const completedLine = completedMatch[1].trim();
+            
+            // Set Tab Title
+            const tabTitle = generateTabTitle(completedLine);
+            process.stderr.write(`\x1b]0;${tabTitle}\x07`);
           }
+        }
+      }
+
+      // Handle session deletion / end
+      if (event.type === 'session.deleted') {
+        if (logger) {
+          await logger.generateSessionSummary();
+          logger.flush();
+        }
       }
     },
 
     "tool.execute.after": async (input, output) => {
-        if (logger) {
-            logger.logToolExecution(input, output);
-        }
+      if (logger) {
+        logger.logToolExecution(input, output);
+      }
     },
 
+    "permission.ask": async (permission: any) => {
+      if (permission.tool === 'Bash' || permission.tool === 'bash') {
+        const command = permission.arguments?.command || '';
+        const result = validateCommand(command);
+        
+        if (result.status === 'deny') {
+          return { 
+            status: 'deny',
+            feedback: result.feedback 
+          };
+        }
+        
+        if (result.status === 'ask') {
+          return { status: 'ask' };
+        }
+      }
+      return { status: 'allow' };
+    },
 
+    /**
+     * Experimental: Inject PAI Core identity into the system prompt
+     */
+    ...({
+      "experimental.chat.system.transform": async (input: any, output: any) => {
+        const skipAgents = ['title', 'summary', 'compaction'];
+        if (input.agent && skipAgents.includes(input.agent.name)) {
+          return;
+        }
+        if (personalizedSkillContent && output.system && output.system.length > 0) {
+          // system[0] is typically the caching-sensitive header, so we inject into system[1] or push
+          let injection = `\n\n--- PAI CORE IDENTITY ---\n${personalizedSkillContent}\n--- END PAI CORE IDENTITY ---\n\n`;
+          
+          if (projectRequirements) {
+            injection += `\n\n--- PROJECT DYNAMIC REQUIREMENTS ---\n${projectRequirements}\n--- END PROJECT DYNAMIC REQUIREMENTS ---\n\n`;
+          }
+
+          if (output.system.length >= 2) {
+            output.system[1] = injection + output.system[1];
+          } else {
+            output.system.push(injection);
+          }
+        }
+      }
+    } as any)
   };
   return hooks;
 };
