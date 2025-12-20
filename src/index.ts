@@ -137,6 +137,7 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
   }
 
   console.log(`PAI Plugin Initialized (Personalized for ${engineerName} & ${daName})`)
+  // Ready to serve
   
   const hooks: Hooks = {
     event: async ({ event }: { event: Event }) => {
