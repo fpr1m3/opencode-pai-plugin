@@ -73,3 +73,7 @@ We provide scripts to verify the plugin in a pristine environment:
 ---
 
 **Note**: This plugin is designed to work with the PAI ecosystem. While it auto-initializes a basic structure, you can customize your identity by editing `$PAI_DIR/skills/core/SKILL.md`.
+
+---
+
+Vibe coded with ❤️ by a mix of **Claude Code** and **OpenCode**.
