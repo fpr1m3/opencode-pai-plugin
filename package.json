@@ -1,6 +1,7 @@
 {
   "name": "opencode-pai-plugin",
   "version": "1.0.0",
+  "type": "module",
   "description": "Personal AI Infrastructure (PAI) plugin for OpenCode",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,11 +12,12 @@
   "scripts": {
     "build": "tsc",
     "test": "bun test",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "prepare": "bun run build"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "^1.0.0",
-    "@opencode-ai/sdk": "^1.0.132",
+    "@opencode-ai/plugin": "^1.0.180",
+    "@opencode-ai/sdk": "^1.0.180",
     "glob": "^13.0.0"
   },
   "devDependencies": {
