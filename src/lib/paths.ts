@@ -16,11 +16,13 @@ import { existsSync } from 'fs';
  * Smart PAI_DIR detection with fallback
  * Priority:
  * 1. PAI_DIR environment variable (if set)
- * 2. ~/.claude (standard location)
+ * 2. $XDG_CONFIG_HOME/opencode (standard XDG location)
+ * 3. ~/.config/opencode (fallback if XDG_CONFIG_HOME is not set)
  */
+const XDG_CONFIG_HOME = process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
 export const PAI_DIR = process.env.PAI_DIR
   ? resolve(process.env.PAI_DIR)
-  : resolve(homedir(), '.claude');
+  : resolve(XDG_CONFIG_HOME, 'opencode');
 
 /**
  * Common PAI directories
