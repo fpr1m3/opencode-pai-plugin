@@ -38,14 +38,24 @@ export function redactString(str) {
     });
     return redacted;
 }
-export function redactObject(obj) {
+export function redactObject(obj, visited = new WeakSet()) {
     if (obj === null || obj === undefined)
         return obj;
     if (typeof obj === 'string') {
         return redactString(obj);
     }
+    if (typeof obj !== 'object') {
+        return obj;
+    }
+    if (obj instanceof Date) {
+        return obj;
+    }
+    if (visited.has(obj)) {
+        return '[CIRCULAR]';
+    }
+    visited.add(obj);
     if (Array.isArray(obj)) {
-        return obj.map(item => redactObject(item));
+        return obj.map(item => redactObject(item, visited));
     }
     if (typeof obj === 'object') {
         const newObj = {};
@@ -56,7 +66,7 @@ export function redactObject(obj) {
                 newObj[key] = '[REDACTED]';
             }
             else {
-                newObj[key] = redactObject(value);
+                newObj[key] = redactObject(value, visited);
             }
         }
         return newObj;

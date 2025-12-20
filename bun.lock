@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "opencode-pai-plugin",
+      "name": "@fpr1m3/opencode-pai-plugin",
       "dependencies": {
         "@opencode-ai/plugin": "^1.0.180",
         "@opencode-ai/sdk": "^1.0.180",

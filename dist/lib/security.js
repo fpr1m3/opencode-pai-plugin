@@ -1,7 +1,4 @@
-/**
- * Security Library for PAI Plugin
- * Ported from legacy security-validator.ts
- */
+import { redactString } from './redaction';
 const REVERSE_SHELL_PATTERNS = [
     /\/dev\/(tcp|udp)\/[0-9]/,
     /bash\s+-i\s+>&?\s*\/dev\//,
@@ -40,7 +37,7 @@ export function validateCommand(command) {
                 return {
                     status: 'deny',
                     category,
-                    feedback: `🚨 SECURITY: Blocked ${category} pattern. Command: ${command.slice(0, 50)}...`,
+                    feedback: `🚨 SECURITY: Blocked ${category} pattern. Command: ${redactString(command).slice(0, 50)}...`,
                 };
             }
         }

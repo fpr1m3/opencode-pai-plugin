@@ -1,5 +1,5 @@
 {
-  "name": "opencode-pai-plugin",
+  "name": "@fpr1m3/opencode-pai-plugin",
   "version": "1.0.0",
   "type": "module",
   "description": "Personal AI Infrastructure (PAI) plugin for OpenCode",
@@ -8,7 +8,13 @@
   "files": [
     "dist"
   ],
-  "repository": "fpr1m3/opencode-pai-plugin",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fpr1m3/opencode-pai-plugin.git"
+  },
   "scripts": {
     "build": "tsc",
     "test": "bun test",
