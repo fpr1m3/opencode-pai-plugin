@@ -14,10 +14,11 @@ mock.module(pathsModulePath, () => {
     getHistoryFilePath: (subdir: string, filename: string) => path.join(TEMP_DIR, 'history', subdir, filename),
     join: path.join,
     dirname: path.dirname,
+    HISTORY_DIR: path.join(TEMP_DIR, 'history'),
   };
 });
 
-describe('PAIPlugin Circuit Breaker', () => {
+describe('PAIPlugin Integration', () => {
   let originalStderrWrite: any;
   let stderrWriteMock: any;
 
@@ -27,9 +28,10 @@ describe('PAIPlugin Circuit Breaker', () => {
       fs.rmSync(TEMP_DIR, { recursive: true, force: true });
     }
     fs.mkdirSync(TEMP_DIR, { recursive: true });
+    fs.mkdirSync(path.join(TEMP_DIR, 'history'), { recursive: true });
 
     originalStderrWrite = process.stderr.write;
-    stderrWriteMock = mock(() => {});
+    stderrWriteMock = mock(() => true);
     process.stderr.write = stderrWriteMock;
   });
 
@@ -41,59 +43,71 @@ describe('PAIPlugin Circuit Breaker', () => {
     mock.restore();
   });
 
-  it('should stop updating title after an error', async () => {
+  it('should initialize and load project requirements', async () => {
+    const projectDir = path.join(TEMP_DIR, 'project');
+    const opencodeDir = path.join(projectDir, '.opencode');
+    fs.mkdirSync(opencodeDir, { recursive: true });
+    fs.writeFileSync(path.join(opencodeDir, 'dynamic-requirements.md'), 'Test Requirements');
+
     const plugin = await PAIPlugin({
-      project: { worktree: '/tmp' },
-      directory: '/tmp',
-      $: {},
-      client: {}
+      worktree: projectDir,
+    } as any);
+
+    expect(plugin).toBeDefined();
+    expect(plugin.event).toBeDefined();
+  });
+
+  it('should update tab title on tool.call event', async () => {
+    const plugin = await PAIPlugin({
+      worktree: TEMP_DIR,
     } as any);
 
     const eventHook = plugin.event;
     if (!eventHook) throw new Error('Event hook not found');
 
-    // 1. First call - succeeds
     await eventHook({
       event: {
-        type: 'message.part.updated',
+        type: 'tool.call',
         properties: {
-          part: { type: 'text', text: 'hello world' }
+          tool: 'Bash',
+          input: { command: 'ls -la' }
         }
       } as any
     });
 
-    expect(stderrWriteMock).toHaveBeenCalledTimes(1);
+    expect(stderrWriteMock).toHaveBeenCalled();
+    const lastCall = stderrWriteMock.mock.calls[0][0];
+    expect(lastCall).toContain('Running ls...');
+  });
 
-    // 2. Second call - make it fail
-    stderrWriteMock.mockImplementationOnce(() => {
-      throw new Error('EPIPE');
+  it('should deny dangerous commands via permission.ask', async () => {
+    const plugin = await PAIPlugin({
+      worktree: TEMP_DIR,
+    } as any);
+
+    const permissionHook = (plugin as any)["permission.ask"];
+    expect(permissionHook).toBeDefined();
+
+    const result = await permissionHook({
+      tool: 'Bash',
+      arguments: { command: 'rm -rf /' }
     });
 
-    await eventHook({
-      event: {
-        type: 'message.part.updated',
-        properties: {
-          part: { type: 'text', text: 'generating code' }
-        }
-      } as any
+    expect(result.status).toBe('deny');
+    expect(result.feedback).toContain('SECURITY');
+  });
+
+  it('should ask for confirmation on risky git commands', async () => {
+    const plugin = await PAIPlugin({
+      worktree: TEMP_DIR,
+    } as any);
+
+    const permissionHook = (plugin as any)["permission.ask"];
+    const result = await permissionHook({
+      tool: 'Bash',
+      arguments: { command: 'git push --force' }
     });
 
-    // Should have been called (and failed)
-    expect(stderrWriteMock).toHaveBeenCalledTimes(2);
-
-    // 3. Third call - should be skipped due to circuit breaker
-    stderrWriteMock.mockClear();
-    
-    await eventHook({
-      event: {
-        type: 'message.part.updated',
-        properties: {
-          part: { type: 'text', text: 'still generating' }
-        }
-      } as any
-    });
-
-    // Should NOT have been called
-    expect(stderrWriteMock).toHaveBeenCalledTimes(0);
+    expect(result.status).toBe('ask');
   });
 });

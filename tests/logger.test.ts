@@ -43,7 +43,7 @@ describe('Logger Integration', () => {
     const module = await import(loggerPath);
     Logger = module.Logger;
     
-    logger = new Logger('test-session', '/tmp/project');
+    logger = new Logger('test-session');
   });
 
   afterEach(() => {

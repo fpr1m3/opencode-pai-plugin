@@ -24,6 +24,7 @@ const CATASTROPHIC_DELETION_PATTERNS: RegExp[] = [
   /\brm\s+(-[rfivd]+\s+)*\S+\s+~\/?/,
   /\brm\s+(-[rfivd]+\s+)*\.\/\s*$/,
   /\brm\s+(-[rfivd]+\s+)*\.\.\/\s*$/,
+  /\brm\s+(-[rfivd]+\s+)*\/\s*$/,
 ];
 
 const DANGEROUS_FILE_OPS_PATTERNS: RegExp[] = [
