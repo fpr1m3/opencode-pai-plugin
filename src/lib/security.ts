@@ -1,3 +1,5 @@
+import { redactString } from './redaction';
+
 /**
  * Security Library for PAI Plugin
  * Ported from legacy security-validator.ts
@@ -54,7 +56,7 @@ export function validateCommand(command: string): SecurityResult {
         return {
           status: 'deny',
           category,
-          feedback: `🚨 SECURITY: Blocked ${category} pattern. Command: ${command.slice(0, 50)}...`,
+          feedback: `🚨 SECURITY: Blocked ${category} pattern. Command: ${redactString(command).slice(0, 50)}...`,
         };
       }
     }
