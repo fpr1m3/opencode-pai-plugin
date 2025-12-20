@@ -167,8 +167,8 @@ export const PAIPlugin = async ({ worktree }) => {
                     }
                 }
             }
-            // Handle session deletion / end
-            if (event.type === 'session.deleted') {
+            // Handle session deletion / end or idle (for one-shot commands)
+            if (event.type === 'session.deleted' || event.type === 'session.idle') {
                 if (logger) {
                     await logger.generateSessionSummary();
                     logger.flush();
