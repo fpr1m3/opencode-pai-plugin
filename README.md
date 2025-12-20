@@ -35,9 +35,31 @@ The plugin centers around the `PAI_DIR` environment variable.
 
 ## Installation
 
+The easiest way to install the plugin and initialize your PAI infrastructure is using the setup script:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/fpr1m3/opencode-pai-plugin/main/setup.sh | bash
+```
+
+Or, if you have already cloned the repository:
+
+```bash
+./setup.sh
+```
+
+## Manual Installation
+
 ```bash
 bun add github:fpr1m3/opencode-pai-plugin
 ```
+
+## Development & Testing
+
+We provide scripts to verify the installation flow in a pristine environment:
+
+*   `./scripts/create-test-env.sh`: Creates a fresh, isolated OpenCode project for testing.
+*   `./scripts/test-full-flow.sh`: Runs a complete E2E installation and verification.
+
 
 ## Usage
 
