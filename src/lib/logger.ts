@@ -3,6 +3,7 @@ import { dirname, join } from 'path';
 import type { Event } from '@opencode-ai/sdk';
 import { PAI_DIR, getHistoryFilePath, HISTORY_DIR } from './paths';
 import { enrichEventWithAgentMetadata, isAgentSpawningCall } from './metadata-extraction';
+import { redactString, redactObject } from './redaction';
 
 interface HookEvent {
   source_app: string;
@@ -115,7 +116,7 @@ export class Logger {
               
               if (tool === 'Bash' || tool === 'bash') {
                   const command = props?.input?.command || props?.tool_input?.command;
-                  if (command) this.commandsExecuted.push(command);
+                  if (command) this.commandsExecuted.push(redactString(command));
               }
               
               if (['Edit', 'Write', 'edit', 'write'].includes(tool)) {
@@ -126,7 +127,7 @@ export class Logger {
           }
       }
 
-      this.writeEvent(anyEvent.type, payload);
+      this.writeEvent(anyEvent.type, redactObject(payload));
   }
 
   /**
@@ -162,7 +163,7 @@ export class Logger {
           call_id: input.callID,
       };
 
-      this.writeEvent('ToolUse', payload, toolName, metadata);
+      this.writeEvent('ToolUse', redactObject(payload), toolName, metadata);
   }
 
   public async generateSessionSummary(): Promise<string | null> {

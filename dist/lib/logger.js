@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync } fr
 import { dirname, join } from 'path';
 import { PAI_DIR, getHistoryFilePath, HISTORY_DIR } from './paths';
 import { enrichEventWithAgentMetadata, isAgentSpawningCall } from './metadata-extraction';
+import { redactString, redactObject } from './redaction';
 export class Logger {
     sessionId;
     toolsUsed = new Set();
@@ -89,7 +90,7 @@ export class Logger {
                 if (tool === 'Bash' || tool === 'bash') {
                     const command = props?.input?.command || props?.tool_input?.command;
                     if (command)
-                        this.commandsExecuted.push(command);
+                        this.commandsExecuted.push(redactString(command));
                 }
                 if (['Edit', 'Write', 'edit', 'write'].includes(tool)) {
                     const path = props?.input?.file_path || props?.input?.path ||
@@ -99,7 +100,7 @@ export class Logger {
                 }
             }
         }
-        this.writeEvent(anyEvent.type, payload);
+        this.writeEvent(anyEvent.type, redactObject(payload));
     }
     /**
      * Log tool execution from tool.execute.after hook
@@ -127,7 +128,7 @@ export class Logger {
             tool_metadata: metadata,
             call_id: input.callID,
         };
-        this.writeEvent('ToolUse', payload, toolName, metadata);
+        this.writeEvent('ToolUse', redactObject(payload), toolName, metadata);
     }
     async generateSessionSummary() {
         try {
