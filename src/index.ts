@@ -116,7 +116,7 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
 
   // Dynamic Variable Substitution for System Prompt
   const daName = process.env.DA || 'PAI';
-  const engineerName = process.env.ENGINEER_NAME || 'Engineer';
+  const engineerName = process.env.ENGINEER_NAME || 'Operator';
   const daColor = process.env.DA_COLOR || 'blue';
 
   const personalizedSkillContent = coreSkillContent

@@ -22,7 +22,7 @@ The agent's behavior is controlled via environment variables:
 | :--- | :--- | :--- |
 | `PAI_DIR` | Root directory for PAI skills and history | `$XDG_CONFIG_HOME/opencode` |
 | `DA` | Name of your Digital Assistant | `PAI` |
-| `ENGINEER_NAME` | Your name/identity | `Engineer` |
+| `ENGINEER_NAME` | Your name/identity | `Operator` |
 | `DA_COLOR` | UI color theme for your DA | `blue` |
 
 ## Codebase Structure

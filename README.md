@@ -34,7 +34,7 @@ The plugin centers around the `PAI_DIR` environment variable.
 | :--- | :--- | :--- |
 | `PAI_DIR` | Root directory for PAI skills and history | `$XDG_CONFIG_HOME/opencode` |
 | `DA` | Name of your Digital Assistant | `PAI` |
-| `ENGINEER_NAME` | Your name/identity | `Engineer` |
+| `ENGINEER_NAME` | Your name/identity | `Operator` |
 | `DA_COLOR` | UI color theme for your DA | `blue` |
 
 ## Quick Start
