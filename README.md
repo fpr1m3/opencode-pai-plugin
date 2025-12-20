@@ -6,6 +6,10 @@ A native OpenCode plugin that implements the **Personal AI Infrastructure (PAI)*
 
 This project is an OpenCode-compatible clone of the hook system from **Dan Miessler's** [Personal AI Infrastructure (PAI)](https://github.com/danielmiessler/Personal_AI_Infrastructure) project. A massive shout out to Dan for the architectural vision and the original PAI patterns that this plugin brings to the OpenCode ecosystem.
 
+---
+
+**Disclaimer**: This project is independent and is **not** supported by, affiliated with, or endorsed by Dan Miessler or the OpenCode team.
+
 ## Features
 
 ### 1. Identity & Context Injection
