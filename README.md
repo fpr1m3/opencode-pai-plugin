@@ -43,12 +43,12 @@ The plugin centers around the `PAI_DIR` environment variable.
 
 ## Quick Start
 
-Add the plugin to your global `opencode.json` configuration file (typically located at `~/.config/opencode/opencode.json`). OpenCode will automatically install the plugin from GitHub on its next startup.
+Add the plugin to your global `opencode.json` configuration file (typically located at `~/.config/opencode/opencode.json`). OpenCode will automatically install the plugin from the registry on its next startup.
 
 ```json
 {
-  "plugins": [
-    "github:fpr1m3/opencode-pai-plugin"
+  "plugin": [
+    "@fpr1m3/opencode-pai-plugin@1.0.0"
   ]
 }
 ```
