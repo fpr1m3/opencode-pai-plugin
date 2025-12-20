@@ -4,7 +4,44 @@ import { Logger } from './lib/logger';
 import { PAI_DIR } from './lib/paths';
 import { validateCommand } from './lib/security';
 import { join } from 'path';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
+
+/**
+ * Ensure the PAI directory structure exists.
+ */
+function ensurePAIStructure() {
+  const dirs = [
+    join(PAI_DIR, 'skills', 'core'),
+    join(PAI_DIR, 'history', 'raw-outputs'),
+    join(PAI_DIR, 'history', 'sessions'),
+    join(PAI_DIR, 'history', 'system-logs'),
+  ];
+
+  for (const dir of dirs) {
+    if (!existsSync(dir)) {
+      try {
+        mkdirSync(dir, { recursive: true });
+        console.log(`PAI: Created directory ${dir}`);
+      } catch (e) {
+        console.error(`PAI: Failed to create directory ${dir}:`, e);
+      }
+    }
+  }
+
+  const coreSkillPath = join(PAI_DIR, 'skills', 'core', 'SKILL.md');
+  if (!existsSync(coreSkillPath)) {
+    const defaultSkill = `# PAI Core Identity
+You are {{DA}}, a Personal AI Infrastructure. 
+Your primary engineer is {{ENGINEER_NAME}}.
+`;
+    try {
+      writeFileSync(coreSkillPath, defaultSkill, 'utf-8');
+      console.log(`PAI: Created default SKILL.md at ${coreSkillPath}`);
+    } catch (e) {
+      console.error(`PAI: Failed to create default SKILL.md:`, e);
+    }
+  }
+}
 
 /**
  * Check if an event should be skipped to prevent recursive logging.
@@ -62,6 +99,9 @@ function generateTabTitle(completedLine?: string): string {
 export const PAIPlugin: Plugin = async ({ worktree }) => {
   let logger: Logger | null = null;
   let currentSessionId: string | null = null;
+  
+  // Auto-initialize PAI infrastructure if needed
+  ensurePAIStructure();
   
   // Load CORE skill content from $PAI_DIR/skills/core/SKILL.md
   let coreSkillContent = '';

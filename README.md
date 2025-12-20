@@ -2,6 +2,10 @@
 
 A native OpenCode plugin that implements the **Personal AI Infrastructure (PAI)** logic, replacing legacy hook scripts with a cohesive, lifecycle-aware system.
 
+## Credits & Inspiration
+
+This project is an OpenCode-compatible clone of the hook system from **Dan Miessler's** [Personal AI Infrastructure (PAI)](https://github.com/danielmiessler/Personal_AI_Infrastructure) project. A massive shout out to Dan for the architectural vision and the original PAI patterns that this plugin brings to the OpenCode ecosystem.
+
 ## Features
 
 ### 1. Identity & Context Injection
@@ -33,44 +37,35 @@ The plugin centers around the `PAI_DIR` environment variable.
 | `ENGINEER_NAME` | Your name/identity | `Engineer` |
 | `DA_COLOR` | UI color theme for your DA | `blue` |
 
-## Installation
+## Quick Start
 
-The easiest way to install the plugin and initialize your PAI infrastructure is using the setup script:
+Add the plugin to your global `opencode.json` configuration file (typically located at `~/.config/opencode/opencode.json`). OpenCode will automatically install the plugin from GitHub on its next startup.
 
-```bash
-curl -sSL https://raw.githubusercontent.com/fpr1m3/opencode-pai-plugin/main/setup.sh | bash
+```json
+{
+  "plugins": [
+    "github:fpr1m3/opencode-pai-plugin"
+  ]
+}
 ```
 
-Or, if you have already cloned the repository:
-
-```bash
-./setup.sh
-```
-
-## Manual Installation
-
-```bash
-bun add github:fpr1m3/opencode-pai-plugin
-```
+Upon first run, the plugin will automatically:
+1. Detect or create your `PAI_DIR` (default: `$XDG_CONFIG_HOME/opencode`).
+2. Initialize the required directory structure for skills and history.
+3. Create a default `SKILL.md` core identity if one does not exist.
 
 ## Development & Testing
 
-We provide scripts to verify the installation flow in a pristine environment:
+We provide scripts to verify the plugin in a pristine environment:
 
 *   `./scripts/create-test-env.sh`: Creates a fresh, isolated OpenCode project for testing.
-*   `./scripts/test-full-flow.sh`: Runs a complete E2E installation and verification.
+*   `./scripts/test-full-flow.sh`: Runs a complete E2E verification of the plugin lifecycle.
 
+## Roadmap / TODO
 
-## Usage
-
-Register the plugin in your `.opencode/plugins.ts` (or equivalent):
-
-```typescript
-import { PAIPlugin } from "@opencode-ai/opencode-pai";
-
-export default PAIPlugin;
-```
+- [ ] **Voice Server Integration**: Implementation of the PAI voice notification server to provide audible feedback on task completion.
+- [ ] **Enhanced Agent Mapping**: More granular tracking of subagent state transitions.
 
 ---
 
-**Note**: This plugin is designed to work with the PAI ecosystem and requires a valid `PAI_DIR` structure to function fully.
+**Note**: This plugin is designed to work with the PAI ecosystem. While it auto-initializes a basic structure, you can customize your identity by editing `$PAI_DIR/skills/core/SKILL.md`.
