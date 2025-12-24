@@ -1,5 +1,5 @@
 import { Logger } from './lib/logger';
-import { PAI_DIR } from './lib/paths';
+import { PAI_DIR, HISTORY_DIR } from './lib/paths';
 import { validateCommand } from './lib/security';
 import { join } from 'path';
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
@@ -9,9 +9,15 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
 function ensurePAIStructure() {
     const dirs = [
         join(PAI_DIR, 'skills', 'core'),
-        join(PAI_DIR, 'history', 'raw-outputs'),
-        join(PAI_DIR, 'history', 'sessions'),
-        join(PAI_DIR, 'history', 'system-logs'),
+        join(HISTORY_DIR, 'raw-outputs'),
+        join(HISTORY_DIR, 'sessions'),
+        join(HISTORY_DIR, 'learnings'),
+        join(HISTORY_DIR, 'decisions'),
+        join(HISTORY_DIR, 'research'),
+        join(HISTORY_DIR, 'execution', 'features'),
+        join(HISTORY_DIR, 'execution', 'bugs'),
+        join(HISTORY_DIR, 'execution', 'refactors'),
+        join(HISTORY_DIR, 'system-logs'),
     ];
     for (const dir of dirs) {
         if (!existsSync(dir)) {
@@ -152,18 +158,25 @@ export const PAIPlugin = async ({ worktree }) => {
                     process.stderr.write(`\x1b]0;Agent: ${type}...\x07`);
                 }
             }
-            // Handle assistant completion (Tab Titles)
+            // Handle assistant completion (Tab Titles & UOCS)
             if (event.type === 'message.updated') {
                 const info = anyEvent.properties?.info;
-                if (info?.author === 'assistant' && info?.content) {
-                    const content = typeof info.content === 'string' ? info.content : '';
+                const role = info?.role || info?.author;
+                if (role === 'assistant') {
+                    // Robust content extraction
+                    const content = info?.content || info?.text || '';
+                    const contentStr = typeof content === 'string' ? content : '';
                     // Look for COMPLETED: line (can be prefaced by 🎯 or just text)
-                    const completedMatch = content.match(/(?:🎯\s*)?COMPLETED:\s*(.+?)(?:\n|$)/i);
+                    const completedMatch = contentStr.match(/(?:🎯\s*)?COMPLETED:\s*(.+?)(?:\n|$)/i);
                     if (completedMatch) {
                         const completedLine = completedMatch[1].trim();
                         // Set Tab Title
                         const tabTitle = generateTabTitle(completedLine);
                         process.stderr.write(`\x1b]0;${tabTitle}\x07`);
+                        // UOCS: Process response for artifact generation
+                        if (logger && contentStr) {
+                            await logger.processAssistantMessage(contentStr);
+                        }
                     }
                 }
             }

@@ -29,6 +29,11 @@ export declare class Logger {
         metadata: any;
     }): void;
     generateSessionSummary(): Promise<string | null>;
+    processAssistantMessage(content: string): Promise<void>;
+    private parseStructuredResponse;
+    private isLearningCapture;
+    private determineArtifactType;
+    private createArtifact;
     logError(context: string, error: any): void;
     private writeEvent;
     flush(): void;

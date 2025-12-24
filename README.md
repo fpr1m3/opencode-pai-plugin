@@ -17,8 +17,9 @@ This project is an OpenCode-compatible clone of the hook system from **Dan Miess
 *   **Dynamic Substitution**: Supports placeholders like `{{DA}}`, `{{DA_COLOR}}`, and `{{ENGINEER_NAME}}` for personalized interactions.
 *   **Project Requirements**: Automatically detects and loads `.opencode/dynamic-requirements.md` from your current project, allowing for task-specific instructions.
 
-### 2. Intelligent History & Logging
+### 2. Intelligent History & Logging (UOCS)
 *   **Real-time Event Capture**: Logs all tool calls and SDK events to `PAI_DIR/history/raw-outputs` in an analytics-ready JSONL format.
+*   **Universal Output Capture System (UOCS)**: Automatically parses assistant responses for structured sections (SUMMARY, ANALYSIS, etc.) and generates artifacts in `decisions/`, `learnings/`, `research/`, or `execution/` based on context.
 *   **Session Summaries**: Generates human-readable Markdown summaries in `PAI_DIR/history/sessions` at the end of every session, tracking files modified, tools used, and commands executed.
 *   **Agent Mapping**: Tracks session-to-agent relationships (e.g., mapping a subagent session to its specialized type).
 
