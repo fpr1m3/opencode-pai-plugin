@@ -31,3 +31,6 @@ The agent's behavior is controlled via environment variables:
 - `src/lib/security.ts`: Contains the security validation logic and attack patterns.
 - `src/lib/paths.ts`: Centralized path resolution for the PAI directory structure.
 - `src/lib/metadata-extraction.ts`: Utility for enriching events with agent-specific metadata.
+
+## Workflow Rules
+- **Publishing**: ALWAYS use `bun publish` for publishing updates to the registry. Do not use `npm publish`.
