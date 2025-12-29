@@ -8,7 +8,7 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
  */
 function ensurePAIStructure() {
     const dirs = [
-        join(PAI_DIR, 'skills', 'core'),
+        join(PAI_DIR, 'skill', 'core'),
         join(HISTORY_DIR, 'raw-outputs'),
         join(HISTORY_DIR, 'sessions'),
         join(HISTORY_DIR, 'learnings'),
@@ -30,7 +30,7 @@ function ensurePAIStructure() {
             }
         }
     }
-    const coreSkillPath = join(PAI_DIR, 'skills', 'core', 'SKILL.md');
+    const coreSkillPath = join(PAI_DIR, 'skill', 'core', 'SKILL.md');
     if (!existsSync(coreSkillPath)) {
         const defaultSkill = `# PAI Core Identity
 You are {{DA}}, a Personal AI Infrastructure. 
@@ -95,9 +95,9 @@ export const PAIPlugin = async ({ worktree }) => {
     let currentSessionId = null;
     // Auto-initialize PAI infrastructure if needed
     ensurePAIStructure();
-    // Load CORE skill content from $PAI_DIR/skills/core/SKILL.md
+    // Load CORE skill content from $PAI_DIR/skill/core/SKILL.md
     let coreSkillContent = '';
-    const coreSkillPath = join(PAI_DIR, 'skills', 'core', 'SKILL.md');
+    const coreSkillPath = join(PAI_DIR, 'skill', 'core', 'SKILL.md');
     if (existsSync(coreSkillPath)) {
         try {
             coreSkillContent = readFileSync(coreSkillPath, 'utf-8');

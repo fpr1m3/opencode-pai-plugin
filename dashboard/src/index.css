@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .pixelated {
+    image-rendering: pixelated;
+  }
+}
+
+@keyframes robot-float {
+
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+}
+
+@keyframes eye-blink {
+
+  0%,
+  90%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes antenna-glow {
+
+  0%,
+  100% {
+    opacity: 0.4;
+    filter: blur(2px);
+  }
+
+  50% {
+    opacity: 1;
+    filter: blur(4px);
+  }
+}
+
+.animate-robot-float {
+  animation: robot-float 4s ease-in-out infinite;
+}
+
+.animate-eye-blink {
+  animation: eye-blink 5s ease-in-out infinite;
+}
+
+.animate-antenna-glow {
+  animation: antenna-glow 2s ease-in-out infinite;
+}
+
+@layer base {
+  body {
+    @apply bg-zinc-950 text-zinc-100;
+  }
+}

@@ -8,7 +8,7 @@
 PAI is the core Personal AI Infrastructure agent implemented by this plugin. It serves as the primary interface for the OpenCode environment, managing session context, security, logging, and user interactions.
 
 ## Capabilities
-- **Context Management**: Automatically loads the `skills/core/SKILL.md` file from `PAI_DIR`, performing dynamic variable substitution for personalized interaction.
+- **Context Management**: Automatically loads the `skill/core/SKILL.md` file from `PAI_DIR`, performing dynamic variable substitution for personalized interaction.
 - **Project Requirements**: Detects and loads `.opencode/dynamic-requirements.md` from the current project worktree to inject task-specific constraints.
 - **Event Logging**: Logs all session events and tool executions to `PAI_DIR/history/raw-outputs` in an analytics-ready JSONL format.
 - **Session Summarization**: Generates human-readable Markdown summaries in `PAI_DIR/history/sessions` when a session ends.
@@ -20,7 +20,7 @@ The agent's behavior is controlled via environment variables:
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `PAI_DIR` | Root directory for PAI skills and history | `$XDG_CONFIG_HOME/opencode` |
+| `PAI_DIR` | Root directory for PAI skill and history | `$XDG_CONFIG_HOME/opencode` |
 | `DA` | Name of your Digital Assistant | `PAI` |
 | `ENGINEER_NAME` | Your name/identity | `Operator` |
 | `DA_COLOR` | UI color theme for your DA | `blue` |

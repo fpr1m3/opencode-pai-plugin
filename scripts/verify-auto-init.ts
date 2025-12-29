@@ -20,7 +20,7 @@ async function testAutoInit() {
   
   // 2. Verify Directories
   const expectedDirs = [
-    join(testPaiDir, 'skills', 'core'),
+    join(testPaiDir, 'skill', 'core'),
     join(testPaiDir, 'history', 'raw-outputs'),
     join(testPaiDir, 'history', 'sessions'),
   ];
@@ -35,7 +35,7 @@ async function testAutoInit() {
   }
 
   // 3. Verify SKILL.md
-  const skillPath = join(testPaiDir, 'skills', 'core', 'SKILL.md');
+  const skillPath = join(testPaiDir, 'skill', 'core', 'SKILL.md');
   if (existsSync(skillPath)) {
     console.log(`✅ SKILL.md created at ${skillPath}`);
   } else {

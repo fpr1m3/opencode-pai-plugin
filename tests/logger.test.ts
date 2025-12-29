@@ -15,7 +15,7 @@ mock.module(pathsModulePath, () => {
     dirname: path.dirname,
     // Add other exports if needed
     HOOKS_DIR: path.join(TEMP_DIR, 'hooks'),
-    SKILLS_DIR: path.join(TEMP_DIR, 'skills'),
+    SKILLS_DIR: path.join(TEMP_DIR, 'skill'),
     AGENTS_DIR: path.join(TEMP_DIR, 'agents'),
     HISTORY_DIR: path.join(TEMP_DIR, 'history'),
     COMMANDS_DIR: path.join(TEMP_DIR, 'commands'),

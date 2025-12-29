@@ -13,7 +13,7 @@ This project is an OpenCode-compatible clone of the hook system from **Dan Miess
 ## Features
 
 ### 1. Identity & Context Injection
-*   **Core Skill Loading**: Automatically injects your `skills/core/SKILL.md` (from `PAI_DIR`) into the system prompt.
+*   **Core Skill Loading**: Automatically injects your `skill/core/SKILL.md` (from `PAI_DIR`) into the system prompt.
 *   **Dynamic Substitution**: Supports placeholders like `{{DA}}`, `{{DA_COLOR}}`, and `{{ENGINEER_NAME}}` for personalized interactions.
 *   **Project Requirements**: Automatically detects and loads `.opencode/dynamic-requirements.md` from your current project, allowing for task-specific instructions.
 
@@ -37,7 +37,7 @@ The plugin centers around the `PAI_DIR` environment variable.
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `PAI_DIR` | Root directory for PAI skills and history | `$XDG_CONFIG_HOME/opencode` |
+| `PAI_DIR` | Root directory for PAI skill and history | `$XDG_CONFIG_HOME/opencode` |
 | `DA` | Name of your Digital Assistant | `PAI` |
 | `ENGINEER_NAME` | Your name/identity | `Operator` |
 | `DA_COLOR` | UI color theme for your DA | `blue` |
@@ -56,7 +56,7 @@ Add the plugin to your global `opencode.json` configuration file (typically loca
 
 Upon first run, the plugin will automatically:
 1. Detect or create your `PAI_DIR` (default: `$XDG_CONFIG_HOME/opencode`).
-2. Initialize the required directory structure for skills and history.
+2. Initialize the required directory structure for skill and history.
 3. Create a default `SKILL.md` core identity if one does not exist.
 
 ## Development & Testing
@@ -73,7 +73,7 @@ We provide scripts to verify the plugin in a pristine environment:
 
 ---
 
-**Note**: This plugin is designed to work with the PAI ecosystem. While it auto-initializes a basic structure, you can customize your identity by editing `$PAI_DIR/skills/core/SKILL.md`.
+**Note**: This plugin is designed to work with the PAI ecosystem. While it auto-initializes a basic structure, you can customize your identity by editing `$PAI_DIR/skill/core/SKILL.md`.
 
 ---
 

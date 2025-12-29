@@ -25,7 +25,7 @@ export const PAI_DIR = process.env.PAI_DIR
  * Common PAI directories
  */
 export const HOOKS_DIR = join(PAI_DIR, 'hooks');
-export const SKILLS_DIR = join(PAI_DIR, 'skills');
+export const SKILLS_DIR = join(PAI_DIR, 'skill');
 export const AGENTS_DIR = join(PAI_DIR, 'agents');
 export const HISTORY_DIR = join(PAI_DIR, 'history');
 export const COMMANDS_DIR = join(PAI_DIR, 'commands');
