@@ -97,6 +97,9 @@ export const PAIPlugin = async ({ worktree }) => {
     const messageTextCache = new Map();
     // Track which messages we've already processed for archival (deduplication)
     const processedMessageIds = new Set();
+    // Track pending Task tool calls to capture subagent_type
+    // Key: callID, Value: subagent_type
+    const pendingTaskCalls = new Map();
     // Auto-initialize PAI infrastructure if needed
     ensurePAIStructure();
     // Load CORE skill content from $PAI_DIR/skill/core/SKILL.md
@@ -173,9 +176,14 @@ export const PAIPlugin = async ({ worktree }) => {
                     const file = props?.input?.file_path?.split('/').pop() || 'file';
                     process.stderr.write(`\x1b]0;Editing ${file}...\x07`);
                 }
-                else if (props?.tool === 'Task') {
+                else if (props?.tool === 'Task' || props?.tool === 'task') {
                     const type = props?.input?.subagent_type || 'agent';
                     process.stderr.write(`\x1b]0;Agent: ${type}...\x07`);
+                    // Cache the subagent_type for when tool.execute.after fires
+                    const callId = props?.id || props?.callId || props?.call_id;
+                    if (callId && props?.input?.subagent_type) {
+                        pendingTaskCalls.set(callId, props.input.subagent_type);
+                    }
                 }
             }
             // Handle assistant message completion (Tab Titles & Artifact Archival)
@@ -232,11 +240,29 @@ export const PAIPlugin = async ({ worktree }) => {
                 // (In practice, messages are cleaned up after processing)
             }
         },
+        "tool.execute.before": async (input, output) => {
+            // Cache subagent_type from Task tool args for later use in tool.execute.after
+            if ((input.tool === 'Task' || input.tool === 'task') && input.callID) {
+                const args = output.args;
+                if (args?.subagent_type) {
+                    pendingTaskCalls.set(input.callID, args.subagent_type);
+                }
+            }
+        },
         "tool.execute.after": async (input, output) => {
             const sessionId = input.sessionID;
             if (sessionId) {
                 if (!loggers.has(sessionId)) {
                     loggers.set(sessionId, new Logger(sessionId, worktree));
+                }
+                // For Task tools, inject the cached subagent_type into metadata
+                if ((input.tool === 'Task' || input.tool === 'task') && input.callID) {
+                    const cachedAgentType = pendingTaskCalls.get(input.callID);
+                    if (cachedAgentType) {
+                        output.metadata = output.metadata || {};
+                        output.metadata.subagent_type = cachedAgentType;
+                        pendingTaskCalls.delete(input.callID);
+                    }
                 }
                 loggers.get(sessionId).logToolExecution(input, output);
             }

@@ -28,6 +28,15 @@ export declare class Logger {
     generateSessionSummary(): Promise<string | null>;
     private parseStructuredResponse;
     private isLearningCapture;
+    /**
+     * Normalize agent role from subagent_type patterns to base role.
+     * Handles patterns like:
+     *   - "subagents/researcher-claude" → "researcher"
+     *   - "subagents/sparc-architect" → "architect"
+     *   - "subagents/sparc-dev" → "engineer"
+     *   - "researcher" → "researcher" (passthrough)
+     */
+    private normalizeAgentRole;
     private determineArtifactType;
     private createArtifact;
     logError(context: string, error: any): void;
