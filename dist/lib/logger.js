@@ -1,18 +1,52 @@
 import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
-import { PAI_DIR, getHistoryFilePath, HISTORY_DIR } from './paths';
-import { enrichEventWithAgentMetadata, isAgentSpawningCall } from './metadata-extraction';
+import { PAI_DIR, HISTORY_DIR } from './paths';
+import { isAgentSpawningCall, enrichEventWithAgentMetadata } from './metadata-extraction';
 import { redactString, redactObject } from './redaction';
 export class Logger {
     sessionId;
+    worktree;
     toolsUsed = new Set();
     filesChanged = new Set();
     commandsExecuted = [];
+    processedMessageIds = new Set();
     startTime = Date.now();
-    constructor(sessionId) {
+    constructor(sessionId, worktree = '/') {
         this.sessionId = sessionId;
+        this.worktree = worktree;
     }
-    // Get PST timestamp
+    getHistoryDir() {
+        if (process.env.HISTORY_DIR)
+            return process.env.HISTORY_DIR;
+        if (existsSync(PAI_DIR))
+            return HISTORY_DIR;
+        return join(this.worktree, '.opencode', 'history');
+    }
+    async processAssistantMessage(content, messageId) {
+        try {
+            // Deduplication: skip if we've already processed this message
+            if (messageId) {
+                if (this.processedMessageIds.has(messageId))
+                    return;
+                this.processedMessageIds.add(messageId);
+            }
+            // Parse structured response sections
+            const sections = this.parseStructuredResponse(content);
+            // Require at least SUMMARY or COMPLETED to be a valid structured response
+            // This prevents archiving every random message
+            const hasRequiredSection = sections['SUMMARY'] || sections['COMPLETED'];
+            if (!hasRequiredSection || Object.keys(sections).length < 2) {
+                return;
+            }
+            const agentRole = this.getAgentForSession(this.sessionId);
+            const isLearning = this.isLearningCapture(sections);
+            const type = this.determineArtifactType(agentRole, isLearning, sections);
+            await this.createArtifact(type, content, sections);
+        }
+        catch (error) {
+            this.logError('ProcessAssistantMessage', error);
+        }
+    }
     getPSTTimestamp() {
         const date = new Date();
         const pstDate = new Date(date.toLocaleString('en-US', { timeZone: process.env.TIME_ZONE || 'America/Los_Angeles' }));
@@ -31,11 +65,11 @@ export class Logger {
         const month = String(pstDate.getMonth() + 1).padStart(2, '0');
         const day = String(pstDate.getDate()).padStart(2, '0');
         const filename = `${year}-${month}-${day}_all-events.jsonl`;
-        const filePath = getHistoryFilePath('raw-outputs', filename);
+        const historyDir = this.getHistoryDir();
+        const filePath = join(historyDir, 'raw-outputs', filename);
         const dir = dirname(filePath);
-        if (!existsSync(dir)) {
+        if (!existsSync(dir))
             mkdirSync(dir, { recursive: true });
-        }
         return filePath;
     }
     getSessionMappingFile() {
@@ -49,39 +83,24 @@ export class Logger {
                 return mappings[sessionId] || 'pai';
             }
         }
-        catch (error) {
-            // Ignore errors, default to pai
-        }
+        catch (error) { }
         return 'pai';
     }
     setAgentForSession(sessionId, agentName) {
         try {
             const mappingFile = this.getSessionMappingFile();
             let mappings = {};
-            if (existsSync(mappingFile)) {
+            if (existsSync(mappingFile))
                 mappings = JSON.parse(readFileSync(mappingFile, 'utf-8'));
-            }
             mappings[sessionId] = agentName;
             writeFileSync(mappingFile, JSON.stringify(mappings, null, 2), 'utf-8');
         }
-        catch (error) {
-            // Silently fail - don't block
-        }
+        catch (error) { }
     }
-    logEvent(event) {
-        // Legacy method, not used much as we use logOpenCodeEvent
-        // But might be called from index.ts if I didn't update all calls
-        this.logOpenCodeEvent(event);
-    }
-    // Method to log generic OpenCode event
     logOpenCodeEvent(event) {
         const anyEvent = event;
         const timestamp = anyEvent.timestamp || Date.now();
-        const payload = {
-            ...anyEvent.properties,
-            timestamp: timestamp
-        };
-        // Track stats for summary
+        const payload = { ...anyEvent.properties, timestamp };
         if (anyEvent.type === 'tool.call' || anyEvent.type === 'tool.execute.before') {
             const props = anyEvent.properties;
             const tool = props?.tool || props?.tool_name;
@@ -93,8 +112,8 @@ export class Logger {
                         this.commandsExecuted.push(redactString(command));
                 }
                 if (['Edit', 'Write', 'edit', 'write'].includes(tool)) {
-                    const path = props?.input?.file_path || props?.input?.path ||
-                        props?.tool_input?.file_path || props?.tool_input?.path;
+                    const path = props?.input?.file_path || props?.input?.path || props?.input?.filePath ||
+                        props?.tool_input?.file_path || props?.tool_input?.path || props?.tool_input?.filePath;
                     if (path)
                         this.filesChanged.add(path);
                 }
@@ -102,19 +121,11 @@ export class Logger {
         }
         this.writeEvent(anyEvent.type, redactObject(payload));
     }
-    /**
-     * Log tool execution from tool.execute.after hook
-     *
-     * Input structure: { tool: string; sessionID: string; callID: string }
-     * Output structure: { title: string; output: string; metadata: any }
-     */
     logToolExecution(input, output) {
         const toolName = input.tool;
         const sessionId = this.sessionId;
         this.toolsUsed.add(toolName);
-        // Extract metadata - may contain additional tool info
         const metadata = output.metadata || {};
-        // Logic to update agent mapping based on Task tool spawning subagents
         if (toolName === 'Task' && metadata?.subagent_type) {
             this.setAgentForSession(sessionId, metadata.subagent_type);
         }
@@ -129,22 +140,23 @@ export class Logger {
             call_id: input.callID,
         };
         this.writeEvent('ToolUse', redactObject(payload), toolName, metadata);
+        if (toolName === 'task' || toolName === 'Task') {
+            if (output.output)
+                this.processAssistantMessage(output.output);
+        }
     }
     async generateSessionSummary() {
         try {
             const now = new Date();
-            const timestamp = now.toISOString()
-                .replace(/:/g, '')
-                .replace(/\..+/, '')
-                .replace('T', '-'); // YYYY-MM-DD-HHMMSS
+            const timestamp = now.toISOString().replace(/:/g, '').replace(/\..+/, '').replace('T', '-');
             const yearMonth = timestamp.substring(0, 7);
             const date = timestamp.substring(0, 10);
             const time = timestamp.substring(11).replace(/-/g, ':');
             const duration = Math.round((Date.now() - this.startTime) / 60000);
-            const sessionDir = join(HISTORY_DIR, 'sessions', yearMonth);
-            if (!existsSync(sessionDir)) {
+            const historyDir = this.getHistoryDir();
+            const sessionDir = join(historyDir, 'sessions', yearMonth);
+            if (!existsSync(sessionDir))
                 mkdirSync(sessionDir, { recursive: true });
-            }
             const focus = this.filesChanged.size > 0 ? 'development' : 'research';
             const filename = `${timestamp}_SESSION_${focus}.md`;
             const filePath = join(sessionDir, filename);
@@ -204,35 +216,19 @@ This session summary was automatically generated by the PAI OpenCode Plugin.
             return filePath;
         }
         catch (error) {
-            this.logError('SessionSummary', error);
             return null;
-        }
-    }
-    async processAssistantMessage(content) {
-        try {
-            const sections = this.parseStructuredResponse(content);
-            if (Object.keys(sections).length === 0)
-                return;
-            const agentRole = this.getAgentForSession(this.sessionId);
-            const isLearning = this.isLearningCapture(sections);
-            const type = this.determineArtifactType(agentRole, isLearning, sections);
-            await this.createArtifact(type, content, sections);
-        }
-        catch (error) {
-            this.logError('ProcessAssistantMessage', error);
         }
     }
     parseStructuredResponse(content) {
         const sections = {};
-        const sectionHeaders = [
-            'SUMMARY', 'ANALYSIS', 'ACTIONS', 'RESULTS', 'STATUS', 'CAPTURE', 'NEXT', 'STORY EXPLANATION', 'COMPLETED'
-        ];
+        const sectionHeaders = ['SUMMARY', 'ANALYSIS', 'ACTIONS', 'RESULTS', 'STATUS', 'CAPTURE', 'NEXT', 'STORY EXPLANATION', 'COMPLETED'];
         for (const header of sectionHeaders) {
-            const regex = new RegExp(`${header}:\\s*([\\s\\S]*?)(?=\\n(?:${sectionHeaders.join('|')}):|$)`, 'i');
+            // Match header with optional markdown bold (**) or other formatting
+            // Handles: "SUMMARY:", "**SUMMARY:**", "**SUMMARY**:", "* SUMMARY:", etc.
+            const regex = new RegExp(`(?:^|\\n)\\*{0,2}\\s*${header}\\s*\\*{0,2}:\\s*([\\s\\S]*?)(?=\\n\\*{0,2}\\s*(?:${sectionHeaders.join('|')})\\s*\\*{0,2}:|$)`, 'i');
             const match = content.match(regex);
-            if (match && match[1]) {
+            if (match && match[1])
                 sections[header] = match[1].trim();
-            }
         }
         return sections;
     }
@@ -240,11 +236,9 @@ This session summary was automatically generated by the PAI OpenCode Plugin.
         const indicators = ['fixed', 'solved', 'discovered', 'lesson', 'troubleshoot', 'debug', 'root cause', 'learning', 'bug', 'issue', 'resolved'];
         const textToSearch = ((sections['ANALYSIS'] || '') + ' ' + (sections['RESULTS'] || '')).toLowerCase();
         let count = 0;
-        for (const indicator of indicators) {
-            if (textToSearch.includes(indicator)) {
+        for (const indicator of indicators)
+            if (textToSearch.includes(indicator))
                 count++;
-            }
-        }
         return count >= 2;
     }
     determineArtifactType(agentRole, isLearning, sections) {
@@ -263,43 +257,37 @@ This session summary was automatically generated by the PAI OpenCode Plugin.
         return isLearning ? 'LEARNING' : 'WORK';
     }
     async createArtifact(type, content, sections) {
-        const now = new Date();
-        const timestamp = now.toISOString()
-            .replace(/:/g, '')
-            .replace(/\..+/, '')
-            .replace('T', '-');
-        const yearMonth = timestamp.substring(0, 7);
-        const summary = sections['SUMMARY'] || 'no-summary';
-        const slug = summary.toLowerCase()
-            .replace(/[^\w\s-]/g, '')
-            .replace(/\s+/g, '-')
-            .substring(0, 50);
-        const filename = `${timestamp}_${type}_${slug}.md`;
-        let subdir = 'execution';
-        if (type === 'LEARNING')
-            subdir = 'learnings';
-        else if (type === 'DECISION')
-            subdir = 'decisions';
-        else if (type === 'RESEARCH')
-            subdir = 'research';
-        else if (type === 'WORK')
-            subdir = 'sessions';
-        else {
-            // For BUG, REFACTOR, FEATURE
-            if (type === 'BUG')
-                subdir = join('execution', 'bugs');
-            else if (type === 'REFACTOR')
-                subdir = join('execution', 'refactors');
-            else
-                subdir = join('execution', 'features');
-        }
-        const targetDir = join(HISTORY_DIR, subdir, yearMonth);
-        if (!existsSync(targetDir)) {
-            mkdirSync(targetDir, { recursive: true });
-        }
-        const filePath = join(targetDir, filename);
-        const agentRole = this.getAgentForSession(this.sessionId);
-        const frontmatter = `---
+        try {
+            const now = new Date();
+            const timestamp = now.toISOString().replace(/:/g, '').replace(/\..+/, '').replace('T', '-');
+            const yearMonth = timestamp.substring(0, 7);
+            const summary = sections['SUMMARY'] || 'no-summary';
+            const slug = summary.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').substring(0, 50);
+            const filename = `${timestamp}_${type}_${slug}.md`;
+            let subdir = 'execution';
+            if (type === 'LEARNING')
+                subdir = 'learnings';
+            else if (type === 'DECISION')
+                subdir = 'decisions';
+            else if (type === 'RESEARCH')
+                subdir = 'research';
+            else if (type === 'WORK')
+                subdir = 'sessions';
+            else {
+                if (type === 'BUG')
+                    subdir = join('execution', 'bugs');
+                else if (type === 'REFACTOR')
+                    subdir = join('execution', 'refactors');
+                else
+                    subdir = join('execution', 'features');
+            }
+            const historyDir = this.getHistoryDir();
+            const targetDir = join(historyDir, subdir, yearMonth);
+            if (!existsSync(targetDir))
+                mkdirSync(targetDir, { recursive: true });
+            const filePath = join(targetDir, filename);
+            const agentRole = this.getAgentForSession(this.sessionId);
+            const frontmatter = `---
 capture_type: ${type}
 timestamp: ${new Date().toISOString()}
 session_id: ${this.sessionId}
@@ -309,7 +297,11 @@ ${sections['SUMMARY'] ? `summary: ${sections['SUMMARY'].replace(/"/g, '\\"')}` :
 
 ${content}
 `;
-        writeFileSync(filePath, redactString(frontmatter), 'utf-8');
+            writeFileSync(filePath, redactString(frontmatter), 'utf-8');
+        }
+        catch (e) {
+            this.logError('CreateArtifact', e);
+        }
     }
     logError(context, error) {
         try {
@@ -319,26 +311,22 @@ ${content}
             const month = String(pstDate.getMonth() + 1).padStart(2, '0');
             const day = String(pstDate.getDate()).padStart(2, '0');
             const filename = `${year}-${month}-${day}_errors.log`;
-            const filePath = getHistoryFilePath('system-logs', filename);
+            const historyDir = this.getHistoryDir();
+            const filePath = join(historyDir, 'system-logs', filename);
             const dir = dirname(filePath);
-            if (!existsSync(dir)) {
+            if (!existsSync(dir))
                 mkdirSync(dir, { recursive: true });
-            }
             const timestamp = this.getPSTTimestamp();
             const errorMessage = error instanceof Error ? error.message : String(error);
             const stack = error instanceof Error ? error.stack : '';
             const logEntry = `[${timestamp}] [${context}] ${errorMessage}\n${stack}\n-------------------\n`;
             appendFileSync(filePath, logEntry, 'utf-8');
         }
-        catch (e) {
-            // Intentionally silent - TUI protection
-        }
+        catch (e) { }
     }
-    // Core write method
     writeEvent(eventType, payload, toolName, toolInput) {
         const sessionId = this.sessionId;
         let agentName = this.getAgentForSession(sessionId);
-        // Create base event object
         let hookEvent = {
             source_app: agentName,
             session_id: sessionId,
@@ -347,10 +335,8 @@ ${content}
             timestamp: Date.now(),
             timestamp_pst: this.getPSTTimestamp()
         };
-        // Enrich with agent instance metadata if this is a Task tool call
         if (toolName && toolInput && isAgentSpawningCall(toolName, toolInput)) {
-            hookEvent = enrichEventWithAgentMetadata(hookEvent, toolInput, payload.description // Assuming description is available in payload if passed
-            );
+            hookEvent = enrichEventWithAgentMetadata(hookEvent, toolInput, payload.description);
         }
         try {
             const eventsFile = this.getEventsFilePath();
@@ -361,7 +347,5 @@ ${content}
             this.logError('EventCapture', error);
         }
     }
-    flush() {
-        // No-op for now as we append synchronously
-    }
+    flush() { }
 }

@@ -1,24 +1,21 @@
 import type { Event } from '@opencode-ai/sdk';
 export declare class Logger {
     private sessionId;
+    private worktree;
     private toolsUsed;
     private filesChanged;
     private commandsExecuted;
+    private processedMessageIds;
     private startTime;
-    constructor(sessionId: string);
+    constructor(sessionId: string, worktree?: string);
+    private getHistoryDir;
+    processAssistantMessage(content: string, messageId?: string): Promise<void>;
     private getPSTTimestamp;
     private getEventsFilePath;
     private getSessionMappingFile;
     private getAgentForSession;
     private setAgentForSession;
-    logEvent(event: Event): void;
     logOpenCodeEvent(event: Event): void;
-    /**
-     * Log tool execution from tool.execute.after hook
-     *
-     * Input structure: { tool: string; sessionID: string; callID: string }
-     * Output structure: { title: string; output: string; metadata: any }
-     */
     logToolExecution(input: {
         tool: string;
         sessionID: string;
@@ -29,7 +26,6 @@ export declare class Logger {
         metadata: any;
     }): void;
     generateSessionSummary(): Promise<string | null>;
-    processAssistantMessage(content: string): Promise<void>;
     private parseStructuredResponse;
     private isLearningCapture;
     private determineArtifactType;

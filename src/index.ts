@@ -4,7 +4,7 @@ import { Logger } from './lib/logger';
 import { PAI_DIR, HISTORY_DIR } from './lib/paths';
 import { validateCommand } from './lib/security';
 import { join } from 'path';
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } from 'fs';
 
 /**
  * Ensure the PAI directory structure exists.
@@ -103,8 +103,14 @@ function generateTabTitle(completedLine?: string): string {
 }
 
 export const PAIPlugin: Plugin = async ({ worktree }) => {
-  let logger: Logger | null = null;
-  let currentSessionId: string | null = null;
+  const loggers = new Map<string, Logger>();
+  
+  // Track the latest text content for each message (from streaming parts)
+  // Key: messageID, Value: latest full text from part.text
+  const messageTextCache = new Map<string, string>();
+  
+  // Track which messages we've already processed for archival (deduplication)
+  const processedMessageIds = new Set<string>();
   
   // Auto-initialize PAI infrastructure if needed
   ensurePAIStructure();
@@ -149,17 +155,36 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
     event: async ({ event }: { event: Event }) => {
       const anyEvent = event as any;
 
-      // Initialize Logger on session creation
-      if (event.type === 'session.created') {
-        currentSessionId = anyEvent.properties.info.id;
-        logger = new Logger(currentSessionId!);
+      // Get Session ID from event (try multiple locations)
+      const sessionId = anyEvent.properties?.part?.sessionID ||
+                        anyEvent.properties?.info?.sessionID || 
+                        anyEvent.properties?.sessionID || 
+                        anyEvent.sessionID;
+
+      if (!sessionId) return;
+
+      // Initialize Logger if needed
+      if (!loggers.has(sessionId)) {
+        loggers.set(sessionId, new Logger(sessionId, worktree));
+      }
+      const logger = loggers.get(sessionId)!;
+
+      // Handle generic event logging (skip streaming parts to reduce noise)
+      if (!shouldSkipEvent(event, sessionId) && event.type !== 'message.part.updated') {
+        logger.logOpenCodeEvent(event);
       }
 
-      // Handle generic event logging
-      if (logger &&
-        event.type !== 'message.part.updated' && 
-        !shouldSkipEvent(event, currentSessionId)) {
-        logger.logOpenCodeEvent(event);
+      // STREAMING CAPTURE: Cache the latest text from message.part.updated
+      // The part.text field contains the FULL accumulated text, not a delta
+      if (event.type === 'message.part.updated') {
+        const part = anyEvent.properties?.part;
+        const messageId = part?.messageID;
+        const partType = part?.type;
+        
+        // Only cache text parts (not tool parts)
+        if (messageId && partType === 'text' && part?.text) {
+          messageTextCache.set(messageId, part.text);
+        }
       }
 
       // Handle real-time tab title updates (Pre-Tool Use)
@@ -177,45 +202,72 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
         }
       }
 
-      // Handle assistant completion (Tab Titles & UOCS)
+      // Handle assistant message completion (Tab Titles & Artifact Archival)
       if (event.type === 'message.updated') {
         const info = anyEvent.properties?.info;
         const role = info?.role || info?.author;
+        const messageId = info?.id;
         
-        if (role === 'assistant') {
-          // Robust content extraction
-          const content = info?.content || info?.text || '';
-          const contentStr = typeof content === 'string' ? content : '';
+        if (role === 'assistant' && messageId) {
+          // Get content from our streaming cache first, fallback to info.content
+          let contentStr = messageTextCache.get(messageId) || '';
           
-          // Look for COMPLETED: line (can be prefaced by 🎯 or just text)
-          const completedMatch = contentStr.match(/(?:🎯\s*)?COMPLETED:\s*(.+?)(?:\n|$)/i);
-          if (completedMatch) {
-            const completedLine = completedMatch[1].trim();
-            
-            // Set Tab Title
-            const tabTitle = generateTabTitle(completedLine);
-            process.stderr.write(`\x1b]0;${tabTitle}\x07`);
-
-            // UOCS: Process response for artifact generation
-            if (logger && contentStr) {
-              await logger.processAssistantMessage(contentStr);
+          // Fallback: try to get content from the event itself
+          if (!contentStr) {
+            const content = info?.content || info?.text || '';
+            if (typeof content === 'string') {
+              contentStr = content;
+            } else if (Array.isArray(content)) {
+              contentStr = content
+                .map((p: any) => {
+                  if (typeof p === 'string') return p;
+                  if (p?.text) return p.text;
+                  if (p?.content) return p.content;
+                  return '';
+                })
+                .join('');
             }
+          }
+          
+          // Process if we have content and haven't processed this message yet
+          if (contentStr && !processedMessageIds.has(messageId)) {
+            processedMessageIds.add(messageId);
+            
+            // Look for COMPLETED: line for tab title
+            const completedMatch = contentStr.match(/(?:🎯\s*)?COMPLETED:\s*(.+?)(?:\n|$)/i);
+            if (completedMatch) {
+              const completedLine = completedMatch[1].trim();
+              const tabTitle = generateTabTitle(completedLine);
+              process.stderr.write(`\x1b]0;${tabTitle}\x07`);
+            }
+            
+            // Archive structured response
+            await logger.processAssistantMessage(contentStr, messageId);
+            
+            // Clean up cache for this message
+            messageTextCache.delete(messageId);
           }
         }
       }
 
       // Handle session deletion / end or idle (for one-shot commands)
       if (event.type === 'session.deleted' || event.type === 'session.idle') {
-        if (logger) {
-          await logger.generateSessionSummary();
-          logger.flush();
-        }
+        await logger.generateSessionSummary();
+        logger.flush();
+        loggers.delete(sessionId);
+        
+        // Clean up any stale cache entries for this session
+        // (In practice, messages are cleaned up after processing)
       }
     },
 
     "tool.execute.after": async (input, output) => {
-      if (logger) {
-        logger.logToolExecution(input, output);
+      const sessionId = input.sessionID;
+      if (sessionId) {
+        if (!loggers.has(sessionId)) {
+          loggers.set(sessionId, new Logger(sessionId, worktree));
+        }
+        loggers.get(sessionId)!.logToolExecution(input, output);
       }
     },
 
