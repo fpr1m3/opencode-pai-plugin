@@ -38,16 +38,41 @@ const DANGEROUS_GIT_PATTERNS: RegExp[] = [
   /\bgit\s+reset\s+--hard/i,
 ];
 
+const EXFILTRATION_PATTERNS: RegExp[] = [
+  /\b(ping|dig|nslookup|host)\s+/i,
+  /curl.*(@|--upload-file)/i,
+];
+
+const RCE_PATTERNS: RegExp[] = [
+  /\bfind\s+.*-exec\b/i,
+  /\bstrings\b/i,
+];
+
+const PROTECTED_PATH_PATTERNS: RegExp[] = [
+  /\.config\/opencode/i,
+  /opencode-pai-plugin\/src/i,
+];
+
 const BLOCK_CATEGORIES = [
   { category: 'reverse_shell', patterns: REVERSE_SHELL_PATTERNS },
   { category: 'instruction_override', patterns: INSTRUCTION_OVERRIDE_PATTERNS },
   { category: 'catastrophic_deletion', patterns: CATASTROPHIC_DELETION_PATTERNS },
   { category: 'dangerous_file_ops', patterns: DANGEROUS_FILE_OPS_PATTERNS },
+  { category: 'data_exfiltration', patterns: EXFILTRATION_PATTERNS },
+  { category: 'remote_code_execution', patterns: RCE_PATTERNS },
+  { category: 'path_protection', patterns: PROTECTED_PATH_PATTERNS },
 ];
 
 const ASK_CATEGORIES = [
   { category: 'dangerous_git', patterns: DANGEROUS_GIT_PATTERNS },
 ];
+
+export function validatePath(path: string): boolean {
+  for (const pattern of PROTECTED_PATH_PATTERNS) {
+    if (pattern.test(path)) return false;
+  }
+  return true;
+}
 
 export function validateCommand(command: string): SecurityResult {
   for (const { category, patterns } of BLOCK_CATEGORIES) {

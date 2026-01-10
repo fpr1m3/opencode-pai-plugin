@@ -2,7 +2,7 @@ import type { Plugin, Hooks } from '@opencode-ai/plugin';
 import type { Event } from '@opencode-ai/sdk';
 import { Logger } from './lib/logger';
 import { PAI_DIR, HISTORY_DIR } from './lib/paths';
-import { validateCommand } from './lib/security';
+import { validateCommand, validatePath } from './lib/security';
 import { join } from 'path';
 import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } from 'fs';
 
@@ -100,6 +100,30 @@ function generateTabTitle(completedLine?: string): string {
     }
   }
   return 'PAI Task Done';
+}
+
+/**
+ * Sanitize strings by removing Unicode Tag characters (U+E0000-U+E007F)
+ * Mutates the input object to ensure changes are preserved across hooks.
+ */
+function sanitize(input: any): any {
+  if (typeof input === 'string') {
+    const sanitized = input.replace(/[\u{E0000}-\u{E007F}]/gu, '');
+    return sanitized;
+  }
+  if (Array.isArray(input)) {
+    for (let i = 0; i < input.length; i++) {
+      input[i] = sanitize(input[i]);
+    }
+    return input;
+  }
+  if (typeof input === 'object' && input !== null) {
+    for (const [key, value] of Object.entries(input)) {
+      input[key] = sanitize(value);
+    }
+    return input;
+  }
+  return input;
 }
 
 export const PAIPlugin: Plugin = async ({ worktree }) => {
@@ -271,6 +295,31 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
     },
 
     "tool.execute.before": async (input, output) => {
+      // Step 1: Unicode Sanitization (Security Hardening)
+      if (output.args) {
+        output.args = sanitize(output.args);
+      }
+
+      // Step 2: Command Validation for Bash (Security Hardening)
+      const toolName = input.tool?.toLowerCase();
+      if (toolName === 'bash') {
+        const command = (output.args as any)?.command;
+        if (command) {
+          const result = validateCommand(command);
+          if (result.status === 'deny') {
+            throw new Error(result.feedback || '🚨 SECURITY: Command denied.');
+          }
+        }
+      }
+
+      // Step 3: Path Validation for Write/Edit tools (Security Hardening)
+      if (toolName === 'write' || toolName === 'edit') {
+        const filePath = (output.args as any)?.filePath || (output.args as any)?.file_path;
+        if (filePath && !validatePath(filePath)) {
+          throw new Error(`🚨 SECURITY: Writing to protected path ${filePath} is blocked.`);
+        }
+      }
+
       // Cache subagent_type from Task tool args for later use in tool.execute.after
       if ((input.tool === 'Task' || input.tool === 'task') && input.callID) {
         const args = output.args as any;
@@ -281,6 +330,11 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
     },
 
     "tool.execute.after": async (input, output) => {
+      // Step 1: Unicode Sanitization of tool output (Security Hardening)
+      if (output.output) {
+        output.output = sanitize(output.output);
+      }
+
       const sessionId = input.sessionID;
       if (sessionId) {
         if (!loggers.has(sessionId)) {
@@ -317,6 +371,18 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
           return { status: 'ask' };
         }
       }
+
+      // Phase 2: Disable YOLO Mode by default (Security Hardening)
+      // Require PAI_I_AM_DANGEROUS=true for auto-approval of non-blocked tools.
+      // This forces Human-In-The-Loop (HITL) for all tool executions.
+      const isDangerous = process.env.PAI_I_AM_DANGEROUS === 'true';
+      if (!isDangerous) {
+        return { 
+          status: 'ask',
+          feedback: '⚠️ HITL: User confirmation required (PAI_I_AM_DANGEROUS is not set).' 
+        };
+      }
+
       return { status: 'allow' };
     },
 

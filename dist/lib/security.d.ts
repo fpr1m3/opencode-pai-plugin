@@ -7,4 +7,5 @@ export interface SecurityResult {
     category?: string;
     feedback?: string;
 }
+export declare function validatePath(path: string): boolean;
 export declare function validateCommand(command: string): SecurityResult;

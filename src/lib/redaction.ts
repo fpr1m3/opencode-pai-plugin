@@ -18,6 +18,9 @@ const SECRET_PATTERNS = [
   /\bBearer\s+[a-zA-Z0-9\-\._~+/]+=*/g,
 ];
 
+// ANSI Escape Code pattern
+const ANSI_PATTERN = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
+
 // Regex for Key-Value assignments like "key=value" or "key: value" where key is sensitive
 // This catches "export AWS_SECRET_KEY=..." or JSON "password": "..."
 // We construct this dynamically from SENSITIVE_KEYS
@@ -29,7 +32,8 @@ const SENSITIVE_KEY_PATTERN = new RegExp(
 export function redactString(str: string): string {
   if (!str) return str;
 
-  let redacted = str;
+  // 0. Strip ANSI escape codes (Terminal Sanitization)
+  let redacted = str.replace(ANSI_PATTERN, '');
 
   // 1. Redact specific patterns (like AWS keys)
   for (const pattern of SECRET_PATTERNS) {
