@@ -39,7 +39,7 @@ const DANGEROUS_GIT_PATTERNS: RegExp[] = [
 ];
 
 const EXFILTRATION_PATTERNS: RegExp[] = [
-  /\b(ping|dig|nslookup|host)\s+/i,
+  /\b(ping|dig|nslookup|host|wget|nc|netcat|ncat|telnet|socat|ftp|tftp)\s+/i,
   /curl.*(@|--upload-file)/i,
 ];
 

@@ -22,7 +22,7 @@ const DANGEROUS_GIT_PATTERNS = [
     /\bgit\s+reset\s+--hard/i,
 ];
 const EXFILTRATION_PATTERNS = [
-    /\b(ping|dig|nslookup|host)\s+/i,
+    /\b(ping|dig|nslookup|host|wget|nc|netcat|ncat|telnet|socat|ftp|tftp)\s+/i,
     /curl.*(@|--upload-file)/i,
 ];
 const RCE_PATTERNS = [

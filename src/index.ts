@@ -355,7 +355,7 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
       }
     },
 
-    "permission.ask": async (permission: any) => {
+    "permission.ask": async (permission: any) => { permission.arguments = sanitize(permission.arguments);
       if (permission.tool === 'Bash' || permission.tool === 'bash') {
         const command = permission.arguments?.command || '';
         const result = validateCommand(command);
