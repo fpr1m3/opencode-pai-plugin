@@ -58,7 +58,7 @@ Add the plugin to your global `opencode.json` configuration file (typically loca
 ```json
 {
   "plugin": [
-    "@fpr1m3/opencode-pai-plugin@1.0.0"
+    "@fpr1m3/opencode-pai-plugin@2.0.0"
   ]
 }
 ```
