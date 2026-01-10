@@ -128,21 +128,21 @@ function sanitize(input: any): any {
 
 export const PAIPlugin: Plugin = async ({ worktree }) => {
   const loggers = new Map<string, Logger>();
-
+  
   // Track the latest text content for each message (from streaming parts)
   // Key: messageID, Value: latest full text from part.text
   const messageTextCache = new Map<string, string>();
-
+  
   // Track which messages we've already processed for archival (deduplication)
   const processedMessageIds = new Set<string>();
-
+  
   // Track pending Task tool calls to capture subagent_type
   // Key: callID, Value: subagent_type
   const pendingTaskCalls = new Map<string, string>();
-
+  
   // Auto-initialize PAI infrastructure if needed
   ensurePAIStructure();
-
+  
   // Load CORE skill content from $PAI_DIR/skill/core/SKILL.md
   let coreSkillContent = '';
   const coreSkillPath = join(PAI_DIR, 'skill', 'core', 'SKILL.md');
@@ -178,16 +178,16 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
 
   console.log(`PAI Plugin Initialized (Personalized for ${engineerName} & ${daName})`)
   // Ready to serve
-
+  
   const hooks: Hooks = {
     event: async ({ event }: { event: Event }) => {
       const anyEvent = event as any;
 
       // Get Session ID from event (try multiple locations)
       const sessionId = anyEvent.properties?.part?.sessionID ||
-        anyEvent.properties?.info?.sessionID ||
-        anyEvent.properties?.sessionID ||
-        anyEvent.sessionID;
+                        anyEvent.properties?.info?.sessionID || 
+                        anyEvent.properties?.sessionID || 
+                        anyEvent.sessionID;
 
       if (!sessionId) return;
 
@@ -208,7 +208,7 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
         const part = anyEvent.properties?.part;
         const messageId = part?.messageID;
         const partType = part?.type;
-
+        
         // Only cache text parts (not tool parts)
         if (messageId && partType === 'text' && part?.text) {
           messageTextCache.set(messageId, part.text);
@@ -240,11 +240,11 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
         const info = anyEvent.properties?.info;
         const role = info?.role || info?.author;
         const messageId = info?.id;
-
+        
         if (role === 'assistant' && messageId) {
           // Get content from our streaming cache first, fallback to info.content
           let contentStr = messageTextCache.get(messageId) || '';
-
+          
           // Fallback: try to get content from the event itself
           if (!contentStr) {
             const content = info?.content || info?.text || '';
@@ -261,11 +261,11 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
                 .join('');
             }
           }
-
+          
           // Process if we have content and haven't processed this message yet
           if (contentStr && !processedMessageIds.has(messageId)) {
             processedMessageIds.add(messageId);
-
+            
             // Look for COMPLETED: line for tab title
             const completedMatch = contentStr.match(/(?:🎯\s*)?COMPLETED:\s*(.+?)(?:\n|$)/i);
             if (completedMatch) {
@@ -273,10 +273,10 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
               const tabTitle = generateTabTitle(completedLine);
               process.stderr.write(`\x1b]0;${tabTitle}\x07`);
             }
-
+            
             // Archive structured response
             await logger.processAssistantMessage(contentStr, messageId);
-
+            
             // Clean up cache for this message
             messageTextCache.delete(messageId);
           }
@@ -288,7 +288,7 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
         await logger.generateSessionSummary();
         logger.flush();
         loggers.delete(sessionId);
-
+        
         // Clean up any stale cache entries for this session
         // (In practice, messages are cleaned up after processing)
       }
@@ -313,15 +313,13 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
       }
 
       // Step 3: Path Validation for Write/Edit tools (Security Hardening)
-      // Allow READ for skills/history, but strictly block WRITE to core config.
-      const filePath = (output.args as any)?.filePath || (output.args as any)?.file_path || (output.args as any)?.path;
-      if (filePath) {
-        const mode = (toolName === 'write' || toolName === 'edit') ? 'write' : 'read';
-        if (!validatePath(filePath, mode)) {
-          throw new Error(`🚨 SECURITY: ${mode === 'write' ? 'Writing to' : 'Reading'} protected path ${filePath} is blocked.`);
+      if (toolName === 'write' || toolName === 'edit') {
+        const filePath = (output.args as any)?.filePath || (output.args as any)?.file_path;
+        if (filePath && !validatePath(filePath)) {
+          throw new Error(`🚨 SECURITY: Writing to protected path ${filePath} is blocked.`);
         }
       }
-      
+
       // Cache subagent_type from Task tool args for later use in tool.execute.after
       if ((input.tool === 'Task' || input.tool === 'task') && input.callID) {
         const args = output.args as any;
@@ -342,7 +340,7 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
         if (!loggers.has(sessionId)) {
           loggers.set(sessionId, new Logger(sessionId, worktree));
         }
-
+        
         // For Task tools, inject the cached subagent_type into metadata
         if ((input.tool === 'Task' || input.tool === 'task') && input.callID) {
           const cachedAgentType = pendingTaskCalls.get(input.callID);
@@ -352,24 +350,23 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
             pendingTaskCalls.delete(input.callID);
           }
         }
-
+        
         loggers.get(sessionId)!.logToolExecution(input, output);
       }
     },
 
-    "permission.ask": async (permission: any) => {
-      permission.arguments = sanitize(permission.arguments);
+    "permission.ask": async (permission: any) => { permission.arguments = sanitize(permission.arguments);
       if (permission.tool === 'Bash' || permission.tool === 'bash') {
         const command = permission.arguments?.command || '';
         const result = validateCommand(command);
-
+        
         if (result.status === 'deny') {
-          return {
+          return { 
             status: 'deny',
-            feedback: result.feedback
+            feedback: result.feedback 
           };
         }
-
+        
         if (result.status === 'ask') {
           return { status: 'ask' };
         }
@@ -380,9 +377,9 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
       // This forces Human-In-The-Loop (HITL) for all tool executions.
       const isDangerous = process.env.PAI_I_AM_DANGEROUS === 'true';
       if (!isDangerous) {
-        return {
+        return { 
           status: 'ask',
-          feedback: '⚠️ HITL: User confirmation required (PAI_I_AM_DANGEROUS is not set).'
+          feedback: '⚠️ HITL: User confirmation required (PAI_I_AM_DANGEROUS is not set).' 
         };
       }
 
@@ -401,7 +398,7 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
         if (personalizedSkillContent && output.system && output.system.length > 0) {
           // system[0] is typically the caching-sensitive header, so we inject into system[1] or push
           let injection = `\n\n--- PAI CORE IDENTITY ---\n${personalizedSkillContent}\n--- END PAI CORE IDENTITY ---\n\n`;
-
+          
           if (projectRequirements) {
             injection += `\n\n--- PROJECT DYNAMIC REQUIREMENTS ---\n${projectRequirements}\n--- END PROJECT DYNAMIC REQUIREMENTS ---\n\n`;
           }

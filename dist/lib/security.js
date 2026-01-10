@@ -1,3 +1,6 @@
+/**
+ * src/lib/security.ts
+ */
 import { redactString } from './redaction';
 const REVERSE_SHELL_PATTERNS = [
     /\/dev\/(tcp|udp)\/[0-9]/,
@@ -29,9 +32,20 @@ const RCE_PATTERNS = [
     /\bfind\s+.*-exec\b/i,
     /\bstrings\b/i,
 ];
-const PROTECTED_PATH_PATTERNS = [
-    /\.config\/opencode/i,
+/**
+ * PATH PROTECTION (Agent Skill Compliant)
+ *
+ * - SENSITIVE_FILE_PATTERNS: Always blocked (Read/Write/Bash).
+ * - PROTECTED_PATH_PATTERNS: Blocked for WRITE, allowed for READ (Discovery).
+ */
+const SENSITIVE_FILE_PATTERNS = [
+    /\.config\/opencode\/(opencode\.json|credentials.*|.*\.key|.*\.token|\.env)/i,
     /opencode-pai-plugin\/src/i,
+];
+const PROTECTED_PATH_PATTERNS = [
+    // Block any part of .config/opencode that isn't a known-safe skill/history path
+    /\.config\/opencode\/(?!history|skill|agents|commands|hooks|sessions|learnings|decisions|raw-outputs|system-logs)/i,
+    /opencode-pai-plugin/i,
 ];
 const BLOCK_CATEGORIES = [
     { category: 'reverse_shell', patterns: REVERSE_SHELL_PATTERNS },
@@ -40,15 +54,26 @@ const BLOCK_CATEGORIES = [
     { category: 'dangerous_file_ops', patterns: DANGEROUS_FILE_OPS_PATTERNS },
     { category: 'data_exfiltration', patterns: EXFILTRATION_PATTERNS },
     { category: 'remote_code_execution', patterns: RCE_PATTERNS },
-    { category: 'path_protection', patterns: PROTECTED_PATH_PATTERNS },
+    { category: 'path_protection', patterns: SENSITIVE_FILE_PATTERNS },
 ];
 const ASK_CATEGORIES = [
     { category: 'dangerous_git', patterns: DANGEROUS_GIT_PATTERNS },
 ];
-export function validatePath(path) {
-    for (const pattern of PROTECTED_PATH_PATTERNS) {
+/**
+ * Validates if a path can be accessed based on the requested mode.
+ */
+export function validatePath(path, mode = 'write') {
+    // Always block access to high-sensitivity files
+    for (const pattern of SENSITIVE_FILE_PATTERNS) {
         if (pattern.test(path))
             return false;
+    }
+    // For writing, block access to protected infrastructure
+    if (mode === 'write') {
+        for (const pattern of PROTECTED_PATH_PATTERNS) {
+            if (pattern.test(path))
+                return false;
+        }
     }
     return true;
 }

@@ -1,20 +1,26 @@
-/**
- * src/lib/security.ts
- */
 import { redactString } from './redaction';
+
+/**
+ * Security Library for PAI Plugin
+ * Ported from legacy security-validator.ts
+ */
+
 export interface SecurityResult {
   status: 'allow' | 'deny' | 'ask';
   category?: string;
   feedback?: string;
 }
+
 const REVERSE_SHELL_PATTERNS: RegExp[] = [
   /\/dev\/(tcp|udp)\/[0-9]/,
   /bash\s+-i\s+>&?\s*\/dev\//,
 ];
+
 const INSTRUCTION_OVERRIDE_PATTERNS: RegExp[] = [
   /ignore\s+(all\s+)?previous\s+instructions?/i,
   /disregard\s+(all\s+)?(prior|previous)\s+(instructions?|rules?)/i,
 ];
+
 const CATASTROPHIC_DELETION_PATTERNS: RegExp[] = [
   /\s+~\/?(\s*$|\s+)/,
   /\brm\s+(-[rfivd]+\s+)*\S+\s+~\/?/,
@@ -22,36 +28,31 @@ const CATASTROPHIC_DELETION_PATTERNS: RegExp[] = [
   /\brm\s+(-[rfivd]+\s+)*\.\.\/\s*$/,
   /\brm\s+(-[rfivd]+\s+)*\/\s*$/,
 ];
+
 const DANGEROUS_FILE_OPS_PATTERNS: RegExp[] = [
   /\bchmod\s+(-R\s+)?0{3,}/,
 ];
+
 const DANGEROUS_GIT_PATTERNS: RegExp[] = [
   /\bgit\s+push\s+.*(-f\b|--force)/i,
   /\bgit\s+reset\s+--hard/i,
 ];
+
 const EXFILTRATION_PATTERNS: RegExp[] = [
   /\b(ping|dig|nslookup|host|wget|nc|netcat|ncat|telnet|socat|ftp|tftp)\s+/i,
   /curl.*(@|--upload-file)/i,
 ];
+
 const RCE_PATTERNS: RegExp[] = [
   /\bfind\s+.*-exec\b/i,
   /\bstrings\b/i,
 ];
-/**
- * PATH PROTECTION (Agent Skill Compliant)
- * 
- * - SENSITIVE_FILE_PATTERNS: Always blocked (Read/Write/Bash).
- * - PROTECTED_PATH_PATTERNS: Blocked for WRITE, allowed for READ (Discovery).
- */
-const SENSITIVE_FILE_PATTERNS: RegExp[] = [
-  /\.config\/opencode\/(opencode\.json|credentials.*|.*\.key|.*\.token|\.env)/i,
+
+const PROTECTED_PATH_PATTERNS: RegExp[] = [
+  /\.config\/opencode/i,
   /opencode-pai-plugin\/src/i,
 ];
-const PROTECTED_PATH_PATTERNS: RegExp[] = [
-  // Block any part of .config/opencode that isn't a known-safe skill/history path
-  /\.config\/opencode\/(?!history|skill|agents|commands|hooks|sessions|learnings|decisions|raw-outputs|system-logs)/i,
-  /opencode-pai-plugin/i,
-];
+
 const BLOCK_CATEGORIES = [
   { category: 'reverse_shell', patterns: REVERSE_SHELL_PATTERNS },
   { category: 'instruction_override', patterns: INSTRUCTION_OVERRIDE_PATTERNS },
@@ -59,27 +60,20 @@ const BLOCK_CATEGORIES = [
   { category: 'dangerous_file_ops', patterns: DANGEROUS_FILE_OPS_PATTERNS },
   { category: 'data_exfiltration', patterns: EXFILTRATION_PATTERNS },
   { category: 'remote_code_execution', patterns: RCE_PATTERNS },
-  { category: 'path_protection', patterns: SENSITIVE_FILE_PATTERNS },
+  { category: 'path_protection', patterns: PROTECTED_PATH_PATTERNS },
 ];
+
 const ASK_CATEGORIES = [
   { category: 'dangerous_git', patterns: DANGEROUS_GIT_PATTERNS },
 ];
-/**
- * Validates if a path can be accessed based on the requested mode.
- */
-export function validatePath(path: string, mode: 'read' | 'write' = 'write'): boolean {
-  // Always block access to high-sensitivity files
-  for (const pattern of SENSITIVE_FILE_PATTERNS) {
+
+export function validatePath(path: string): boolean {
+  for (const pattern of PROTECTED_PATH_PATTERNS) {
     if (pattern.test(path)) return false;
-  }
-  // For writing, block access to protected infrastructure
-  if (mode === 'write') {
-    for (const pattern of PROTECTED_PATH_PATTERNS) {
-      if (pattern.test(path)) return false;
-    }
   }
   return true;
 }
+
 export function validateCommand(command: string): SecurityResult {
   for (const { category, patterns } of BLOCK_CATEGORIES) {
     for (const pattern of patterns) {
@@ -92,6 +86,7 @@ export function validateCommand(command: string): SecurityResult {
       }
     }
   }
+
   for (const { category, patterns } of ASK_CATEGORIES) {
     for (const pattern of patterns) {
       if (pattern.test(command)) {
@@ -103,5 +98,6 @@ export function validateCommand(command: string): SecurityResult {
       }
     }
   }
+
   return { status: 'allow' };
 }

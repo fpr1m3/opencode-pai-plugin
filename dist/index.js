@@ -280,10 +280,12 @@ export const PAIPlugin = async ({ worktree }) => {
                 }
             }
             // Step 3: Path Validation for Write/Edit tools (Security Hardening)
-            if (toolName === 'write' || toolName === 'edit') {
-                const filePath = output.args?.filePath || output.args?.file_path;
-                if (filePath && !validatePath(filePath)) {
-                    throw new Error(`🚨 SECURITY: Writing to protected path ${filePath} is blocked.`);
+            // Allow READ for skills/history, but strictly block WRITE to core config.
+            const filePath = output.args?.filePath || output.args?.file_path || output.args?.path;
+            if (filePath) {
+                const mode = (toolName === 'write' || toolName === 'edit') ? 'write' : 'read';
+                if (!validatePath(filePath, mode)) {
+                    throw new Error(`🚨 SECURITY: ${mode === 'write' ? 'Writing to' : 'Reading'} protected path ${filePath} is blocked.`);
                 }
             }
             // Cache subagent_type from Task tool args for later use in tool.execute.after
