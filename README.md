@@ -23,9 +23,16 @@ This project is an OpenCode-compatible clone of the hook system from **Dan Miess
 *   **Session Summaries**: Generates human-readable Markdown summaries in `PAI_DIR/history/sessions` at the end of every session, tracking files modified, tools used, and commands executed.
 *   **Agent Mapping**: Tracks session-to-agent relationships (e.g., mapping a subagent session to its specialized type).
 
-### 3. Security & Safety
-*   **Security Validator**: A built-in firewall that scans Bash commands for dangerous patterns (reverse shells, recursive deletions, prompt injections) via the `permission.ask` hook.
-*   **Safe Confirmations**: Automatically triggers a confirmation prompt for risky but potentially legitimate operations like forced Git pushes.
+### 3. Security & Safety (10-Tier Firewall)
+*   **Security Validator**: A built-in firewall (`src/lib/security.ts`) that scans Bash commands for dangerous patterns including reverse shells, recursive deletions, and prompt injections.
+*   **Advanced Protection**:
+    *   **Unicode Sanitization**: Automatically strips invisible Unicode "Tag" characters (U+E0000-U+E007F) from all inputs and outputs to prevent hidden prompt injections.
+    *   **Network Exfiltration Block**: Prevents unauthorized data egress by blocking DNS-probing tools like `ping`, `dig`, `nslookup`, `nc`, and `wget`.
+    *   **Shell Escape Defense**: Detects and blocks common shell escape bypasses like `find -exec` and `strings`.
+    *   **Self-Modification Protection**: Locks core configuration files and the plugin's own source code from being modified by the agent.
+*   **Safe-by-Default (HITL)**: All potentially dangerous tool executions require explicit human confirmation. Auto-approval ("YOLO mode") is disabled unless the `PAI_I_AM_DANGEROUS=true` environment variable is set.
+*   **Terminal Sanitization**: Automatically strips ANSI escape codes from all logged output to prevent terminal-based attacks and ensure clean history.
+*   **Data Redaction**: Robustly masks secrets (AWS keys, GitHub tokens, Slack/Stripe/Google keys) in both logs and tool outputs.
 
 ### 4. Interactive Feedback
 *   **Real-time Tab Titles**: Updates your terminal tab title *instantly* when a tool starts (e.g., `Running bash...`, `Editing index.ts...`).
