@@ -32,7 +32,7 @@ The **10-Tier Security Firewall** was inspired by the cutting-edge research of *
     *   **Network Exfiltration Block**: Prevents unauthorized data egress by blocking DNS-probing tools like `ping`, `dig`, `nslookup`, `nc`, and `wget`.
     *   **Shell Escape Defense**: Detects and blocks common shell escape bypasses like `find -exec` and `strings`.
     *   **Self-Modification Protection**: Locks core configuration files and the plugin's own source code from being modified by the agent.
-*   **Safe-by-Default (HITL)**: All potentially dangerous tool executions require explicit human confirmation. Auto-approval ("YOLO mode") is disabled unless the `PAI_I_AM_DANGEROUS=true` environment variable is set.
+*   **Safe-by-Default (HITL)**: All potentially dangerous tool executions—including those matching the security firewall—require explicit human confirmation. The firewall has been tuned in v2.1.0 to prioritize human-in-the-loop (HITL) 'Ask' prompts over hard 'Deny' blocks to maintain agent flow. Auto-approval ("YOLO mode") is disabled unless the `PAI_I_AM_DANGEROUS=true` environment variable is set.
 *   **Terminal Sanitization**: Automatically strips ANSI escape codes from all logged output to prevent terminal-based attacks and ensure clean history.
 *   **Data Redaction**: Robustly masks secrets (AWS keys, GitHub tokens, Slack/Stripe/Google keys) in both logs and tool outputs.
 
@@ -47,9 +47,12 @@ The plugin centers around the `PAI_DIR` environment variable.
 | Variable | Description | Default |
 | :--- | :--- | :--- |
 | `PAI_DIR` | Root directory for PAI skill and history | `$XDG_CONFIG_HOME/opencode` |
+| `HISTORY_DIR` | Override directory for session logs | `$PAI_DIR/history` |
 | `DA` | Name of your Digital Assistant | `PAI` |
 | `ENGINEER_NAME` | Your name/identity | `Operator` |
 | `DA_COLOR` | UI color theme for your DA | `blue` |
+| `TIME_ZONE` | Timezone for log timestamps | `system` |
+| `PAI_I_AM_DANGEROUS` | Enable YOLO mode (auto-approve tools) | `false` |
 
 ## Quick Start
 
@@ -58,7 +61,7 @@ Add the plugin to your global `opencode.json` configuration file (typically loca
 ```json
 {
   "plugin": [
-    "@fpr1m3/opencode-pai-plugin@2.0.0"
+    "@fpr1m3/opencode-pai-plugin@2.1.0"
   ]
 }
 ```

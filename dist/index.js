@@ -280,12 +280,12 @@ export const PAIPlugin = async ({ worktree }) => {
                 }
             }
             // Step 3: Path Validation for Write/Edit tools (Security Hardening)
-            // Allow READ for skills/history, but strictly block WRITE to core config.
             const filePath = output.args?.filePath || output.args?.file_path || output.args?.path;
             if (filePath) {
                 const mode = (toolName === 'write' || toolName === 'edit') ? 'write' : 'read';
-                if (!validatePath(filePath, mode)) {
-                    throw new Error(`🚨 SECURITY: ${mode === 'write' ? 'Writing to' : 'Reading'} protected path ${filePath} is blocked.`);
+                const result = validatePath(filePath, mode);
+                if (result.status === 'deny') {
+                    throw new Error(result.feedback || `🚨 SECURITY: Access to ${filePath} is denied.`);
                 }
             }
             // Cache subagent_type from Task tool args for later use in tool.execute.after
@@ -320,18 +320,25 @@ export const PAIPlugin = async ({ worktree }) => {
         },
         "permission.ask": async (permission) => {
             permission.arguments = sanitize(permission.arguments);
+            // Validation for Bash commands
             if (permission.tool === 'Bash' || permission.tool === 'bash') {
                 const command = permission.arguments?.command || '';
                 const result = validateCommand(command);
-                if (result.status === 'deny') {
-                    return {
-                        status: 'deny',
-                        feedback: result.feedback
-                    };
-                }
-                if (result.status === 'ask') {
-                    return { status: 'ask' };
-                }
+                if (result.status === 'deny')
+                    return { status: 'deny', feedback: result.feedback };
+                if (result.status === 'ask')
+                    return { status: 'ask', feedback: result.feedback };
+            }
+            // Validation for Path-based tools (Edit, Write, Read, etc.)
+            const filePath = permission.arguments?.filePath || permission.arguments?.file_path || permission.arguments?.path;
+            if (filePath) {
+                const toolName = permission.tool?.toLowerCase();
+                const mode = (toolName === 'write' || toolName === 'edit') ? 'write' : 'read';
+                const result = validatePath(filePath, mode);
+                if (result.status === 'deny')
+                    return { status: 'deny', feedback: result.feedback };
+                if (result.status === 'ask')
+                    return { status: 'ask', feedback: result.feedback };
             }
             // Phase 2: Disable YOLO Mode by default (Security Hardening)
             // Require PAI_I_AM_DANGEROUS=true for auto-approval of non-blocked tools.
@@ -373,3 +380,4 @@ export const PAIPlugin = async ({ worktree }) => {
     return hooks;
 };
 export default PAIPlugin;
+// Hello World: Final HITL check for v2.1.0

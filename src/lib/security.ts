@@ -52,7 +52,7 @@ const PROTECTED_PATH_PATTERNS: RegExp[] = [
   /\.config\/opencode\/(?!history|skill|agents|commands|hooks|sessions|learnings|decisions|raw-outputs|system-logs)/i,
   /opencode-pai-plugin/i,
 ];
-const BLOCK_CATEGORIES = [
+const ALL_PATTERNS = [
   { category: 'reverse_shell', patterns: REVERSE_SHELL_PATTERNS },
   { category: 'instruction_override', patterns: INSTRUCTION_OVERRIDE_PATTERNS },
   { category: 'catastrophic_deletion', patterns: CATASTROPHIC_DELETION_PATTERNS },
@@ -60,45 +60,44 @@ const BLOCK_CATEGORIES = [
   { category: 'data_exfiltration', patterns: EXFILTRATION_PATTERNS },
   { category: 'remote_code_execution', patterns: RCE_PATTERNS },
   { category: 'path_protection', patterns: SENSITIVE_FILE_PATTERNS },
-];
-const ASK_CATEGORIES = [
   { category: 'dangerous_git', patterns: DANGEROUS_GIT_PATTERNS },
 ];
 /**
  * Validates if a path can be accessed based on the requested mode.
  */
-export function validatePath(path: string, mode: 'read' | 'write' = 'write'): boolean {
-  // Always block access to high-sensitivity files
+export function validatePath(path: string, mode: 'read' | 'write' = 'write'): SecurityResult {
+  // Check high-sensitivity files
   for (const pattern of SENSITIVE_FILE_PATTERNS) {
-    if (pattern.test(path)) return false;
-  }
-  // For writing, block access to protected infrastructure
-  if (mode === 'write') {
-    for (const pattern of PROTECTED_PATH_PATTERNS) {
-      if (pattern.test(path)) return false;
+    if (pattern.test(path)) {
+      return {
+        status: 'ask',
+        category: 'path_protection',
+        feedback: `⚠️ DANGEROUS: Accessing sensitive path ${path}. Operation requires human confirmation.`
+      };
     }
   }
-  return true;
-}
-export function validateCommand(command: string): SecurityResult {
-  for (const { category, patterns } of BLOCK_CATEGORIES) {
-    for (const pattern of patterns) {
-      if (pattern.test(command)) {
+  // For writing, check protected infrastructure
+  if (mode === 'write') {
+    for (const pattern of PROTECTED_PATH_PATTERNS) {
+      if (pattern.test(path)) {
         return {
-          status: 'deny',
-          category,
-          feedback: `🚨 SECURITY: Blocked ${category} pattern. Command: ${redactString(command).slice(0, 50)}...`,
+          status: 'ask',
+          category: 'path_protection',
+          feedback: `⚠️ DANGEROUS: Writing to protected path ${path}. Operation requires human confirmation.`
         };
       }
     }
   }
-  for (const { category, patterns } of ASK_CATEGORIES) {
+  return { status: 'allow' };
+}
+export function validateCommand(command: string): SecurityResult {
+  for (const { category, patterns } of ALL_PATTERNS) {
     for (const pattern of patterns) {
       if (pattern.test(command)) {
         return {
           status: 'ask',
           category,
-          feedback: `⚠️ DANGEROUS: ${category} operation requires confirmation.`,
+          feedback: `⚠️ DANGEROUS: Detected ${category} pattern. Operation requires human confirmation. Command: ${redactString(command).slice(0, 50)}...`,
         };
       }
     }

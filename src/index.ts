@@ -313,12 +313,12 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
       }
 
       // Step 3: Path Validation for Write/Edit tools (Security Hardening)
-      // Allow READ for skills/history, but strictly block WRITE to core config.
       const filePath = (output.args as any)?.filePath || (output.args as any)?.file_path || (output.args as any)?.path;
       if (filePath) {
         const mode = (toolName === 'write' || toolName === 'edit') ? 'write' : 'read';
-        if (!validatePath(filePath, mode)) {
-          throw new Error(`🚨 SECURITY: ${mode === 'write' ? 'Writing to' : 'Reading'} protected path ${filePath} is blocked.`);
+        const result = validatePath(filePath, mode);
+        if (result.status === 'deny') {
+          throw new Error(result.feedback || `🚨 SECURITY: Access to ${filePath} is denied.`);
         }
       }
       
@@ -359,20 +359,25 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
 
     "permission.ask": async (permission: any) => {
       permission.arguments = sanitize(permission.arguments);
+      
+      // Validation for Bash commands
       if (permission.tool === 'Bash' || permission.tool === 'bash') {
         const command = permission.arguments?.command || '';
         const result = validateCommand(command);
 
-        if (result.status === 'deny') {
-          return {
-            status: 'deny',
-            feedback: result.feedback
-          };
-        }
+        if (result.status === 'deny') return { status: 'deny', feedback: result.feedback };
+        if (result.status === 'ask') return { status: 'ask', feedback: result.feedback };
+      }
 
-        if (result.status === 'ask') {
-          return { status: 'ask' };
-        }
+      // Validation for Path-based tools (Edit, Write, Read, etc.)
+      const filePath = permission.arguments?.filePath || permission.arguments?.file_path || permission.arguments?.path;
+      if (filePath) {
+        const toolName = permission.tool?.toLowerCase();
+        const mode = (toolName === 'write' || toolName === 'edit') ? 'write' : 'read';
+        const result = validatePath(filePath, mode);
+
+        if (result.status === 'deny') return { status: 'deny', feedback: result.feedback };
+        if (result.status === 'ask') return { status: 'ask', feedback: result.feedback };
       }
 
       // Phase 2: Disable YOLO Mode by default (Security Hardening)
@@ -419,3 +424,4 @@ export const PAIPlugin: Plugin = async ({ worktree }) => {
 };
 
 export default PAIPlugin;
+// Hello World: Final HITL check for v2.1.0

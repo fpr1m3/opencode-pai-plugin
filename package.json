@@ -1,6 +1,6 @@
 {
   "name": "@fpr1m3/opencode-pai-plugin",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "description": "Personal AI Infrastructure (PAI) plugin for OpenCode",
   "main": "dist/index.js",

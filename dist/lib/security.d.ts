@@ -6,5 +6,5 @@ export interface SecurityResult {
 /**
  * Validates if a path can be accessed based on the requested mode.
  */
-export declare function validatePath(path: string, mode?: 'read' | 'write'): boolean;
+export declare function validatePath(path: string, mode?: 'read' | 'write'): SecurityResult;
 export declare function validateCommand(command: string): SecurityResult;
