@@ -67,7 +67,8 @@ describe('PAIPlugin Integration', () => {
 
     await eventHook({
       event: {
-        type: 'tool.call',
+        type: "tool.call",
+        sessionID: "test-session",
         properties: {
           tool: 'Bash',
           input: { command: 'ls -la' }
